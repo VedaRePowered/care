@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use syn::ItemFn;
+use syn::{Expr, ItemFn};
 
 fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::TokenStream {
     let func = TokenStream::from(func);
@@ -48,22 +48,40 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // TODO: Config
     let attr = TokenStream::from(attr);
 
+    let conf: Expr = match syn::parse2(attr.clone()) {
+        Ok(i) => i,
+        Err(e) => return token_stream_with_error(attr, e),
+    };
+
     let init_fn = std::env::var(format!("_CARE_INTERNAL_INIT")).ok();
     let update_fn = std::env::var(format!("_CARE_INTERNAL_UPDATE")).ok();
     let draw_fn = std::env::var(format!("_CARE_INTERNAL_DRAW")).ok();
 
-    let init_call = maybe_call_function(init_fn, quote! {});
+    let init_call = maybe_call_function(init_fn, quote! {app_args});
     let update_call = maybe_call_function(update_fn, quote! {delta_time});
     let draw_call = maybe_call_function(draw_fn, quote! {});
 
     let result = quote! {
         fn main() {
+            let config = { #conf };
+            #[cfg(feature = "graphics")]
+            ::care::graphics::init();
+            #[cfg(feature = "window")]
+            ::care::window::open();
+            let app_args: Vec<_> = ::std::env::args().collect();
             #init_call
+            let mut last_time = ::std::time::Instant::now();
             loop {
-                let delta_time = 0.0 as ::care::math::Fl;
+                let next_time = ::std::time::Instant::now();
+                let delta_time = next_time.duration_since(last_time).as_secs_f64() as ::care::math::Fl;
+                last_time = next_time;
                 #update_call
-                #draw_call
-                ::care::graphics::swap();
+                #[cfg(feature = "graphics")]
+                {
+                    #draw_call
+                    ::care::graphics::swap();
+                }
+                let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
             }
         }
     };

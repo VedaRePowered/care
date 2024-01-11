@@ -1,6 +1,7 @@
 pub mod config;
 pub mod graphics;
 pub mod math;
+pub mod window;
 
 // Mark a function as the care initialization function.
 pub use care_macro::care_init as init;
