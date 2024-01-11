@@ -1,0 +1,16 @@
+workspace = { members = ["care-macro"] }
+[package]
+name = "care"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+care-macro = { path = "care-macro" }
+
+nalgebra = "0.32"
+
+[features]
+default = []
+# Use 64 bit floats instead of 32 bit floats everywhere
+f64 = []
+

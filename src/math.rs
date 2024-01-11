@@ -1,0 +1,67 @@
+use nalgebra::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
+
+#[cfg(not(feature = "f64"))]
+pub type Fl = f32;
+#[cfg(not(features = "f64"))]
+pub use std::f32 as std_fl;
+#[cfg(feature = "f64")]
+pub type Fl = f64;
+#[cfg(features = "f64")]
+pub use std::f64 as std_fl;
+
+pub trait IntoFl {
+    fn into_fl(self) -> Fl;
+}
+
+macro_rules! impl_into_fl {
+    ($ty:ident) => {
+        impl IntoFl for $ty {
+            fn into_fl(self) -> Fl {
+                self as Fl
+            }
+        }
+    };
+}
+
+impl_into_fl!(f32);
+impl_into_fl!(f64);
+impl_into_fl!(u8);
+impl_into_fl!(i8);
+impl_into_fl!(u16);
+impl_into_fl!(i16);
+impl_into_fl!(u32);
+impl_into_fl!(i32);
+impl_into_fl!(u64);
+impl_into_fl!(i64);
+impl_into_fl!(u128);
+impl_into_fl!(i128);
+impl_into_fl!(usize);
+impl_into_fl!(isize);
+
+pub struct Vec2(pub Vector2<Fl>);
+pub struct Vec3(pub Vector3<Fl>);
+pub struct Vec4(pub Vector4<Fl>);
+pub struct Mat2(pub Matrix2<Fl>);
+pub struct Mat3(pub Matrix3<Fl>);
+pub struct Mat4(pub Matrix4<Fl>);
+
+macro_rules! impl_vec_n {
+    ( $vec:ident, $inner:ident; $( $name:ident: $ty_name:ident ),* ) => {
+        impl $vec {
+            #[inline(always)]
+            pub fn new( $($name: impl IntoFl,)* ) -> Self {
+                Self($inner::new( $($name.into_fl(),)* ))
+            }
+        }
+        impl<$($ty_name: IntoFl,)*> From<($($ty_name,)*)> for $vec {
+            #[inline(always)]
+            fn from(($($name,)*): ($($ty_name,)*)) -> Self {
+                Self::new($($name,)*)
+            }
+        }
+    };
+}
+
+impl_vec_n!(Vec2, Vector2; x: T, y: U);
+impl_vec_n!(Vec3, Vector3; x: T, y: U, z: V);
+impl_vec_n!(Vec4, Vector4; x: T, y: U, z: V, w: W);
