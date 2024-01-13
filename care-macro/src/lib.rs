@@ -66,10 +66,10 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let config = { #conf };
             #[cfg(feature = "window")]
             ::care::window::init();
-            #[cfg(feature = "graphics")]
-            ::care::graphics::init();
             #[cfg(feature = "window")]
             ::care::window::open(&env!("CARGO_CRATE_NAME"));
+            #[cfg(feature = "graphics")]
+            ::care::graphics::init();
             let app_args: Vec<_> = ::std::env::args().collect();
             #init_call
             let mut last_time = ::std::time::Instant::now();
@@ -81,7 +81,7 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #[cfg(feature = "graphics")]
                 {
                     #draw_call
-                    ::care::graphics::swap();
+                    ::care::graphics::present();
                 }
                 let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
             });

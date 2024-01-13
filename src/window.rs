@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    window::{Window, WindowBuilder}, event::{WindowEvent, Event},
 };
 
 use crate::math::Vec2;
@@ -13,7 +13,7 @@ static HAS_INITIALIZED: AtomicBool = AtomicBool::new(false);
 thread_local! {
     static EVENT_LOOP: RwLock<Option<EventLoop<()>>> = const { RwLock::new(None) };
 }
-static WINDOWS: RwLock<Vec<Window>> = RwLock::new(Vec::new());
+pub(crate) static WINDOWS: RwLock<Vec<Window>> = RwLock::new(Vec::new());
 
 /// Must be called before creating any windows
 pub fn init() {
@@ -77,6 +77,7 @@ pub fn open(name: &str) {
 /// # NOTE
 /// Can only be called from the main thread, calling on any other thread will panic.
 pub fn open_with_settings(settings: WindowSettings) {
+    // TODO: Be able to create windows in the main loop through some unholy and or unsafe {} pointer magic
     if !HAS_INITIALIZED.load(Ordering::Acquire) {
         panic!("Attempted to open window before initializing the window library");
     }
@@ -103,14 +104,21 @@ pub fn open_with_settings(settings: WindowSettings) {
 // Window implementation of the event loop running function
 pub(crate) fn run(mut loop_fn: impl FnMut()) {
     EVENT_LOOP.with(move |el_call| {
-        println!("Running window loop...");
         let el = el_call
             .write()
             .take()
             .expect("Event loop must be run from the main thread");
-        el.run(move |ev, _eh| {
-            println!("Event: {ev:?}");
-            loop_fn();
-        }).unwrap();
+        el.run(move |ev, event_loop| {
+            match ev {
+                Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                    event_loop.exit();
+                }
+                Event::AboutToWait => {
+                    loop_fn();
+                }
+                _ => {}
+            }
+        })
+        .unwrap();
     });
 }

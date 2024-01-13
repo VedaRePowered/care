@@ -79,3 +79,9 @@ macro_rules! impl_vec_n {
 impl_vec_n!(Vec2, Vector2; x: T, y: U);
 impl_vec_n!(Vec3, Vector3; x: T, y: U, z: V);
 impl_vec_n!(Vec4, Vector4; x: T, y: U, z: V, w: W);
+
+impl Mat4 {
+    pub fn ident() -> Self {
+        Mat4(Matrix4::identity())
+    }
+}
