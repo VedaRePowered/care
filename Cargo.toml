@@ -8,6 +8,7 @@ edition = "2021"
 care-macro = { path = "care-macro" }
 
 nalgebra = "0.32"
+parking_lot = "0.12"
 winit = { version = "0.29", optional = true }
 wgpu = { version = "0.18", optional = true }
 

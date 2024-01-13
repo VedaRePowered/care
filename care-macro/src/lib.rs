@@ -64,14 +64,16 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let result = quote! {
         fn main() {
             let config = { #conf };
+            #[cfg(feature = "window")]
+            ::care::window::init();
             #[cfg(feature = "graphics")]
             ::care::graphics::init();
             #[cfg(feature = "window")]
-            ::care::window::open();
+            ::care::window::open(&env!("CARGO_CRATE_NAME"));
             let app_args: Vec<_> = ::std::env::args().collect();
             #init_call
             let mut last_time = ::std::time::Instant::now();
-            loop {
+            ::care::event::main_loop(move || {
                 let next_time = ::std::time::Instant::now();
                 let delta_time = next_time.duration_since(last_time).as_secs_f64() as ::care::math::Fl;
                 last_time = next_time;
@@ -82,7 +84,7 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     ::care::graphics::swap();
                 }
                 let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
-            }
+            });
         }
     };
 

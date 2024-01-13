@@ -38,11 +38,17 @@ impl_into_fl!(i128);
 impl_into_fl!(usize);
 impl_into_fl!(isize);
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Vec2(pub Vector2<Fl>);
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Vec3(pub Vector3<Fl>);
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Vec4(pub Vector4<Fl>);
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Mat2(pub Matrix2<Fl>);
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Mat3(pub Matrix3<Fl>);
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Mat4(pub Matrix4<Fl>);
 
 macro_rules! impl_vec_n {
@@ -51,6 +57,14 @@ macro_rules! impl_vec_n {
             #[inline(always)]
             pub fn new( $($name: impl IntoFl,)* ) -> Self {
                 Self($inner::new( $($name.into_fl(),)* ))
+            }
+            #[inline(always)]
+            pub fn x(&self) -> Fl {
+                self.0.x
+            }
+            #[inline(always)]
+            pub fn y(&self) -> Fl {
+                self.0.y
             }
         }
         impl<$($ty_name: IntoFl,)*> From<($($ty_name,)*)> for $vec {

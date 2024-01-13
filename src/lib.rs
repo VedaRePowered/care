@@ -1,6 +1,11 @@
+#![feature(noop_waker)]
+
 pub mod config;
+pub mod event;
+#[cfg(feature = "graphics")]
 pub mod graphics;
 pub mod math;
+#[cfg(feature = "window")]
 pub mod window;
 
 // Mark a function as the care initialization function.
