@@ -7,12 +7,16 @@ edition = "2021"
 [dependencies]
 care-macro = { path = "care-macro" }
 
+bytemuck = { version = "1", features = ["derive"] }
 nalgebra = "0.32"
 parking_lot = "0.12"
 pollster = { version = "0.3", optional = true }
 # Winit updated raw_window_handle to 0.6 but wgpu is still on 0.5, so this is default features with rwh_06 replaced with _05
 winit = { version = "0.29", default_features = false, features = ["rwh_05", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"], optional = true }
 wgpu = { version = "0.18", optional = true }
+
+[dev-dependencies]
+rand = "0.8"
 
 [features]
 default = ["graphics", "window"]
