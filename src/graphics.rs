@@ -5,7 +5,9 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     fmt::Display,
-    sync::{Arc, OnceLock}, path::Path,
+    path::Path,
+    sync::{Arc, OnceLock},
+    time::Instant,
 };
 
 use bytemuck::{Pod, Zeroable};
@@ -30,6 +32,8 @@ struct GraphicsState {
     render_pipeline_2d: RenderPipeline,
     vertex_buffer_2d: RwLock<Buffer>,
     index_buffer_2d: RwLock<Buffer>,
+    bind_group_layout_2d: wgpu::BindGroupLayout,
+    placeholder_texture: OnceLock<Texture>,
     care_render: RwLock<CareRenderState>,
 }
 
@@ -89,8 +93,8 @@ impl Texture {
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = state.device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Nearest,
@@ -104,6 +108,10 @@ impl Texture {
             sampler,
         }))
     }
+
+    fn size(&self) -> Vec2 {
+        self.0.size
+    }
 }
 
 #[derive(Debug)]
@@ -112,6 +120,21 @@ struct TextureHandle {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
+}
+
+impl TextureHandle {
+    fn bind_group_entries(&self, i: u32) -> [wgpu::BindGroupEntry<'_>; 2] {
+        [
+            wgpu::BindGroupEntry {
+                binding: i * 2,
+                resource: wgpu::BindingResource::TextureView(&self.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: i * 2 + 1,
+                resource: wgpu::BindingResource::Sampler(&self.sampler),
+            },
+        ]
+    }
 }
 
 #[derive(Debug)]
@@ -277,20 +300,19 @@ impl CareRenderState {
                     corner_radii,
                 } => {
                     let tex_size = texture.0.size;
-                    let tex_idx = if let Some(idx) = cdc.textures.iter().position(|t| t == &texture)
-                    {
+                    let tex = if let Some(idx) = cdc.textures.iter().position(|t| t == &texture) {
                         idx
                     } else if cdc.textures.len() < self.max_textures {
                         let new_idx = cdc.textures.len();
                         cdc.textures.push(texture);
-                        new_idx
+                        // offset by one because 0 represents no texture.
+                        cdc.textures.len()
                     } else {
                         draw_calls.push(cdc);
                         cdc = DrawCall::default();
-                        let new_idx = cdc.textures.len();
                         cdc.textures.push(texture);
-                        new_idx
-                    };
+                        cdc.textures.len()
+                    } as u32;
                     let n = cdc.vertices.len() as u32;
                     let size = tex_size * scale;
                     let uv_base = source.0 / tex_size;
@@ -300,28 +322,28 @@ impl CareRenderState {
                         uv: [uv_base.x(), uv_base.y()],
                         colour,
                         rounding: [0.0, 0.0],
-                        tex: 0,
+                        tex,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x + size.0.x, pos.0.y),
                         uv: [uv_base.x() + uv_size.x(), uv_base.y()],
                         colour,
                         rounding: [0.0, 0.0],
-                        tex: 0,
+                        tex,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x, pos.0.y + size.0.y),
                         uv: [uv_base.x(), uv_base.y() + uv_size.y()],
                         colour,
                         rounding: [0.0, 0.0],
-                        tex: 0,
+                        tex,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x + size.0.x, pos.0.y + size.0.y),
                         uv: [uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y()],
                         colour,
                         rounding: [0.0, 0.0],
-                        tex: 0,
+                        tex,
                     });
                     cdc.indices
                         .extend_from_slice(&[n, n + 1, n + 2, n + 2, n + 1, n + 3])
@@ -419,13 +441,12 @@ impl GraphicsState {
             // TODO: How do render textures / canvases relate to surfaces?
             current_surface: *window_surfaces.keys().next().unwrap(),
             commands: Vec::new(),
-            max_textures: limits
-                .max_bindings_per_bind_group
+            max_textures: (limits.max_bindings_per_bind_group / 2)
                 .min(limits.max_sampled_textures_per_shader_stage)
                 .min(limits.max_samplers_per_shader_stage) as usize,
         };
 
-        let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d) = {
+        let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d, bind_group_layouts_2d) = {
             let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("2D Vertex Buffer"),
                 size: 1024,
@@ -439,11 +460,43 @@ impl GraphicsState {
                 mapped_at_creation: false,
             });
 
+            let textures_bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("2D Textures Bind Group Layout"),
+                    entries: (0..render.max_textures as u32)
+                        .flat_map(|i| {
+                            [
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: i * 2,
+                                    visibility: wgpu::ShaderStages::FRAGMENT,
+                                    ty: wgpu::BindingType::Texture {
+                                        multisampled: false,
+                                        view_dimension: wgpu::TextureViewDimension::D2,
+                                        sample_type: wgpu::TextureSampleType::Float {
+                                            filterable: true,
+                                        },
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: i * 2 + 1,
+                                    visibility: wgpu::ShaderStages::FRAGMENT,
+                                    ty: wgpu::BindingType::Sampler(
+                                        wgpu::SamplerBindingType::Filtering,
+                                    ),
+                                    count: None,
+                                },
+                            ]
+                        })
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                });
+
             let shader = device.create_shader_module(wgpu::include_wgsl!("shader_2d.wgsl"));
             let render_pipeline_layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("2D Render Pipeline Layout"),
-                    bind_group_layouts: &[],
+                    bind_group_layouts: &[&textures_bind_group_layout],
                     push_constant_ranges: &[],
                 });
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -485,6 +538,7 @@ impl GraphicsState {
                 pipeline,
                 RwLock::new(vertex_buffer),
                 RwLock::new(index_buffer),
+                textures_bind_group_layout,
             )
         };
 
@@ -498,6 +552,8 @@ impl GraphicsState {
             render_pipeline_2d,
             vertex_buffer_2d,
             index_buffer_2d,
+            bind_group_layout_2d: bind_group_layouts_2d,
+            placeholder_texture: OnceLock::new(),
             care_render: RwLock::new(render),
         }
     }
@@ -507,7 +563,16 @@ static GRAPHICS_STATE: OnceLock<GraphicsState> = OnceLock::new();
 
 /// Initialize the graphics library, must be called on the main thread!
 pub fn init() {
-    GRAPHICS_STATE.get_or_init(|| GraphicsState::new());
+    let state = GRAPHICS_STATE.get_or_init(|| GraphicsState::new());
+    state.placeholder_texture.get_or_init(|| {
+        Texture::new_from_data(
+            2,
+            2,
+            &[
+                255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255,
+            ],
+        )
+    });
 }
 
 pub fn set_colour(colour: impl Into<Vec4>) {
@@ -528,7 +593,7 @@ pub fn texture(tex: &Texture, pos: impl Into<Vec2>) {
 
 #[inline(always)]
 pub fn texture_scale(tex: &Texture, pos: impl Into<Vec2>, scale: impl Into<Vec2>) {
-    texture_source(tex, pos, scale, (0, 0), (0, 0))
+    texture_source(tex, pos, scale, (0, 0), tex.size())
 }
 
 #[inline(always)]
@@ -662,8 +727,28 @@ pub fn present() {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Present command encoder"),
         });
+    let max_textures = state.care_render.read().max_textures;
     let draw_calls = state.care_render.write().render();
+    let placeholder_tex = state.placeholder_texture.get().unwrap();
     for draw_call in draw_calls {
+        let inst = Instant::now();
+        let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Temp Bind Group"),
+            layout: &state.bind_group_layout_2d,
+            entries: (0..max_textures)
+                .flat_map(|i| {
+                    (if let Some(tex) = draw_call.textures.get(i) {
+                        tex
+                    } else {
+                        placeholder_tex
+                    })
+                    .0
+                    .bind_group_entries(i as u32)
+                })
+                .collect::<Vec<_>>()
+                .as_slice(),
+        });
+
         upload_buffer(
             &state.device,
             &state.queue,
@@ -700,6 +785,7 @@ pub fn present() {
                 timestamp_writes: None,
             });
             render_pass.set_pipeline(&state.render_pipeline_2d);
+            render_pass.set_bind_group(0, &bind_group, &[]);
             render_pass.set_vertex_buffer(0, vert.slice(..));
             render_pass.set_index_buffer(idx.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..draw_call.indices.len() as u32, 0, 0..1);

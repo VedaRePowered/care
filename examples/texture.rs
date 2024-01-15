@@ -7,7 +7,6 @@ static tex: RwLock<Option<Texture>> = RwLock::new(None);
 #[care::init]
 fn init(_args: Vec<String>) {
     let texture = Texture::new("examples/test.png");
-    println!("Tex: {texture:?}");
     *tex.write() = Some(texture);
 }
 
