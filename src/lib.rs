@@ -8,6 +8,8 @@ pub mod math;
 #[cfg(feature = "window")]
 pub mod window;
 
+// Make some state for the game
+pub use care_macro::care_state as state;
 // Mark a function as the care initialization function.
 pub use care_macro::care_init as init;
 // Mark a function as the care update function.
