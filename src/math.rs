@@ -73,6 +73,24 @@ macro_rules! impl_vec_n {
             }
         }
 
+        impl ::std::ops::Add<$vec> for $vec {
+            type Output = $vec;
+
+            #[inline(always)]
+            fn add(self, rhs: Self) -> Self::Output {
+                Self::new($(self.$name() + rhs.$name(),)*)
+            }
+        }
+
+        impl ::std::ops::Sub<$vec> for $vec {
+            type Output = $vec;
+
+            #[inline(always)]
+            fn sub(self, rhs: Self) -> Self::Output {
+                Self::new($(self.$name() - rhs.$name(),)*)
+            }
+        }
+
         impl ::std::ops::Mul<$vec> for $vec {
             type Output = $vec;
 

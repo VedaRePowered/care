@@ -2,7 +2,7 @@
 
 #[care::draw]
 fn draw() {
-    care::graphics::text("Hello, World!", (10, 10));
+    care::graphics::text("Hello, World!", (20, 20));
 }
 
 // This creates a default main function that calls the draw, update and init functions if present,

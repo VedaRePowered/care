@@ -31,7 +31,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	if (in.tex != u32(0)) {
-		return in.colour * textureSample(texture_0, sampler_0, in.uv);
+		return in.colour * textureSample(texture_0, sampler_0, in.uv).wwww;
 	} else {
 		return in.colour;
 	}
