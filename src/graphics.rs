@@ -1,15 +1,23 @@
 //! Graphics functions, all of which will panic if called from a thread that is not the main
 //! thread, or if any function is called before calling [init()] from the main thread.
 
-use std::{collections::HashMap, fmt::Display, sync::OnceLock};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    fmt::Display,
+    sync::{Arc, OnceLock}, path::Path,
+};
 
 use bytemuck::{Pod, Zeroable};
+use image::{DynamicImage, EncodableLayout};
 use parking_lot::RwLock;
 use pollster::FutureExt;
-use wgpu::{Adapter, Buffer, Device, Instance, Queue, RenderPipeline, Surface, VertexAttribute};
+use wgpu::{
+    Adapter, Buffer, Device, Instance, Limits, Queue, RenderPipeline, Surface, VertexAttribute,
+};
 use winit::window::WindowId;
 
-use crate::math::{Fl, IntoFl, Mat4, Vec2, Vec4};
+use crate::math::{Fl, IntoFl, Mat3, Vec2, Vec4};
 
 #[derive(Debug)]
 struct GraphicsState {
@@ -17,11 +25,109 @@ struct GraphicsState {
     _adapter: Adapter,
     device: Device,
     queue: Queue,
+    limits: Limits,
     window_surfaces: HashMap<WindowId, (Surface, (u32, u32))>,
     render_pipeline_2d: RenderPipeline,
     vertex_buffer_2d: RwLock<Buffer>,
     index_buffer_2d: RwLock<Buffer>,
     care_render: RwLock<CareRenderState>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Texture(Arc<TextureHandle>);
+
+impl PartialEq for Texture {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Texture {
+    pub fn new(filename: impl AsRef<Path>) -> Self {
+        Self::new_from_image(image::io::Reader::open(filename).unwrap().decode().unwrap())
+    }
+    pub fn new_from_file_format(file_data: &[u8]) {
+        todo!()
+    }
+    pub fn new_fill(size: impl Into<Vec2>, colour: Vec4) {
+        todo!()
+    }
+    pub fn new_from_image(img: DynamicImage) -> Self {
+        Self::new_from_data(img.width(), img.height(), img.to_rgba8().as_bytes())
+    }
+    pub fn new_from_data(width: u32, height: u32, data: &[u8]) -> Self {
+        let mut state = GRAPHICS_STATE.get().expect("Graphics not initialized");
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = state.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        state.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = state.device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        Texture(Arc::new(TextureHandle {
+            size: Vec2::new(width, height),
+            texture,
+            view,
+            sampler,
+        }))
+    }
+}
+
+#[derive(Debug)]
+struct TextureHandle {
+    size: Vec2,
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
+}
+
+#[derive(Debug)]
+enum LineJoinStyle {
+    Miter,
+    LimitedMiter,
+    Bevel,
+    Rounded,
+    None,
+}
+
+#[derive(Debug)]
+enum LineEndStyle {
+    Flat,
+    Point,
+    Rounded,
 }
 
 #[derive(Debug)]
@@ -30,38 +136,55 @@ enum DrawCommandData {
         pos: Vec2,
         size: Vec2,
         rotation: Fl,
-        round_corners: [Fl; 4],
+        corner_radii: [Fl; 4],
     },
     Triangle {
         verts: [Vec2; 3],
+        tex_uvs: Option<(Texture, [Vec2; 3])>,
     },
     Circle {
         center: Vec2,
         radius: Fl,
         elipseness: Vec2,
     },
+    Text {
+        pos: Vec2,
+        text: Cow<'static, str>,
+    },
+    Texture {
+        texture: Texture,
+        pos: Vec2,
+        scale: Vec2,
+        source: (Vec2, Vec2),
+        rotation: Fl,
+        corner_radii: [Fl; 4],
+    },
+    Line {
+        points: Vec<(Vec2, Fl, LineJoinStyle)>,
+        ends: (LineEndStyle, LineEndStyle),
+    },
 }
 
 #[derive(Debug)]
 struct DrawCommand {
-    transform: Mat4,
+    transform: Mat3,
     colour: Vec4,
     data: DrawCommandData,
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
 struct Vertex2d {
     position: [f32; 2],
     uv: [f32; 2],
     colour: [u8; 4],
-    rounding: f32,
+    rounding: [f32; 2],
+    tex: u32,
 }
 
 impl Vertex2d {
     fn descriptor() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRS: [VertexAttribute; 4] =
-            wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint8x4, 3 => Float32];
+        const ATTRS: [VertexAttribute; 5] = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Unorm8x4, 3 => Float32x2, 4 => Uint32];
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -72,26 +195,34 @@ impl Vertex2d {
 
 #[derive(Debug)]
 struct CareRenderState {
-    transform_stack: Vec<Mat4>,
-    current_transform: Mat4,
+    transform_stack: Vec<Mat3>,
+    current_transform: Mat3,
     current_colour: Vec4,
     current_surface: WindowId,
     commands: Vec<DrawCommand>,
+    max_textures: usize,
+}
+
+#[derive(Debug, Default)]
+struct DrawCall<T: bytemuck::Pod + Default> {
+    vertices: Vec<T>,
+    indices: Vec<u32>,
+    textures: Vec<Texture>,
 }
 
 impl CareRenderState {
     fn reset(&mut self) {
         self.transform_stack.clear();
-        self.current_transform = Mat4::ident();
+        self.current_transform = Mat3::ident();
         self.current_colour = Vec4::new(1, 1, 1, 1);
         self.commands.clear();
     }
-    fn render(&self) -> (Vec<Vertex2d>, Vec<u32>) {
+    fn render(&mut self) -> Vec<DrawCall<Vertex2d>> {
         let screen_size = Vec2::new(800, 600);
         let vert_pos = |x: Fl, y: Fl| [(x / screen_size.0.x) as f32, (y / screen_size.0.y) as f32];
-        let mut vertices = Vec::new();
-        let mut indices = Vec::new();
-        for command in &self.commands {
+        let mut draw_calls = Vec::new();
+        let mut cdc = DrawCall::default();
+        for command in self.commands.drain(..) {
             let colour = [
                 (command.colour.0.x * 255.99) as u8,
                 (command.colour.0.y * 255.99) as u8,
@@ -103,44 +234,113 @@ impl CareRenderState {
                     pos,
                     size,
                     rotation,
-                    round_corners,
+                    corner_radii: round_corners,
                 } => {
-                    let n = vertices.len() as u32;
-                    vertices.push(Vertex2d {
+                    let n = cdc.vertices.len() as u32;
+                    cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x, pos.0.y),
                         uv: [0.0, 0.0],
                         colour,
-                        rounding: 0.0,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
                     });
-                    vertices.push(Vertex2d {
+                    cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x + size.0.x, pos.0.y),
                         uv: [1.0, 0.0],
                         colour,
-                        rounding: 0.0,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
                     });
-                    vertices.push(Vertex2d {
+                    cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x, pos.0.y + size.0.y),
                         uv: [0.0, 1.0],
                         colour,
-                        rounding: 0.0,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
                     });
-                    vertices.push(Vertex2d {
+                    cdc.vertices.push(Vertex2d {
                         position: vert_pos(pos.0.x + size.0.x, pos.0.y + size.0.y),
                         uv: [1.0, 1.0],
                         colour,
-                        rounding: 0.0,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
                     });
-                    indices.extend_from_slice(&[n, n + 1, n + 2, n + 2, n + 1, n + 3])
+                    cdc.indices
+                        .extend_from_slice(&[n, n + 1, n + 2, n + 2, n + 1, n + 3])
                 }
-                DrawCommandData::Triangle { verts } => todo!(),
-                DrawCommandData::Circle {
-                    center,
-                    radius,
-                    elipseness,
+                DrawCommandData::Texture {
+                    texture,
+                    pos,
+                    scale,
+                    source,
+                    rotation,
+                    corner_radii,
+                } => {
+                    let tex_size = texture.0.size;
+                    let tex_idx = if let Some(idx) = cdc.textures.iter().position(|t| t == &texture)
+                    {
+                        idx
+                    } else if cdc.textures.len() < self.max_textures {
+                        let new_idx = cdc.textures.len();
+                        cdc.textures.push(texture);
+                        new_idx
+                    } else {
+                        draw_calls.push(cdc);
+                        cdc = DrawCall::default();
+                        let new_idx = cdc.textures.len();
+                        cdc.textures.push(texture);
+                        new_idx
+                    };
+                    let n = cdc.vertices.len() as u32;
+                    let size = tex_size * scale;
+                    let uv_base = source.0 / tex_size;
+                    let uv_size = source.1 / tex_size;
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos(pos.0.x, pos.0.y),
+                        uv: [uv_base.x(), uv_base.y()],
+                        colour,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
+                    });
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos(pos.0.x + size.0.x, pos.0.y),
+                        uv: [uv_base.x() + uv_size.x(), uv_base.y()],
+                        colour,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
+                    });
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos(pos.0.x, pos.0.y + size.0.y),
+                        uv: [uv_base.x(), uv_base.y() + uv_size.y()],
+                        colour,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
+                    });
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos(pos.0.x + size.0.x, pos.0.y + size.0.y),
+                        uv: [uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y()],
+                        colour,
+                        rounding: [0.0, 0.0],
+                        tex: 0,
+                    });
+                    cdc.indices
+                        .extend_from_slice(&[n, n + 1, n + 2, n + 2, n + 1, n + 3])
+                }
+                DrawCommandData::Triangle {
+                    verts: _,
+                    tex_uvs: _,
                 } => todo!(),
+                DrawCommandData::Circle {
+                    center: _,
+                    radius: _,
+                    elipseness: _,
+                } => todo!(),
+                DrawCommandData::Text { pos: _, text: _ } => todo!(),
+                DrawCommandData::Line { points: _, ends: _ } => todo!(),
             }
         }
-        (vertices, indices)
+        draw_calls.push(cdc);
+        draw_calls
     }
 }
 
@@ -210,13 +410,19 @@ impl GraphicsState {
             surface.configure(&device, &config);
         }
 
+        let limits = device.limits();
+
         let render = CareRenderState {
             transform_stack: Vec::new(),
-            current_transform: Mat4::ident(),
+            current_transform: Mat3::ident(),
             current_colour: Vec4::new(1, 1, 1, 1),
             // TODO: How do render textures / canvases relate to surfaces?
             current_surface: *window_surfaces.keys().next().unwrap(),
             commands: Vec::new(),
+            max_textures: limits
+                .max_bindings_per_bind_group
+                .min(limits.max_sampled_textures_per_shader_stage)
+                .min(limits.max_samplers_per_shader_stage) as usize,
         };
 
         let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d) = {
@@ -285,6 +491,7 @@ impl GraphicsState {
         Self {
             _instance: instance,
             _adapter: adapter,
+            limits,
             device,
             queue,
             window_surfaces,
@@ -304,15 +511,94 @@ pub fn init() {
 }
 
 pub fn set_colour(colour: impl Into<Vec4>) {
-    GRAPHICS_STATE.get().unwrap().care_render.write().current_colour = colour.into();
+    GRAPHICS_STATE
+        .get()
+        .unwrap()
+        .care_render
+        .write()
+        .current_colour = colour.into();
 }
 
 pub fn text(text: impl Display, pos: impl Into<Vec2>) {}
 
+#[inline(always)]
+pub fn texture(tex: &Texture, pos: impl Into<Vec2>) {
+    texture_scale(tex, pos, (1, 1))
+}
+
+#[inline(always)]
+pub fn texture_scale(tex: &Texture, pos: impl Into<Vec2>, scale: impl Into<Vec2>) {
+    texture_source(tex, pos, scale, (0, 0), (0, 0))
+}
+
+#[inline(always)]
+pub fn texture_source(
+    tex: &Texture,
+    pos: impl Into<Vec2>,
+    scale: impl Into<Vec2>,
+    source_pos: impl Into<Vec2>,
+    source_size: impl Into<Vec2>,
+) {
+    texture_rot(tex, pos, scale, source_pos, source_size, 0)
+}
+
+#[inline(always)]
+pub fn texture_rot(
+    tex: &Texture,
+    pos: impl Into<Vec2>,
+    scale: impl Into<Vec2>,
+    source_pos: impl Into<Vec2>,
+    source_size: impl Into<Vec2>,
+    rotation: impl IntoFl,
+) {
+    texture_rounded(
+        tex,
+        pos,
+        scale,
+        source_pos,
+        source_size,
+        rotation,
+        [0, 0, 0, 0],
+    )
+}
+
+pub fn texture_rounded(
+    tex: &Texture,
+    pos: impl Into<Vec2>,
+    scale: impl Into<Vec2>,
+    source_pos: impl Into<Vec2>,
+    source_size: impl Into<Vec2>,
+    rotation: impl IntoFl,
+    corner_radii: [impl IntoFl; 4],
+) {
+    // TODO: Function to get this:
+    let mut render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .write();
+    // TODO: Function to do this:
+    let command = DrawCommand {
+        transform: render.current_transform.clone(),
+        colour: render.current_colour,
+        data: DrawCommandData::Texture {
+            texture: tex.clone(),
+            pos: pos.into(),
+            scale: scale.into(),
+            source: (source_pos.into(), source_size.into()),
+            rotation: rotation.into_fl(),
+            corner_radii: corner_radii.map(|n| n.into_fl()),
+        },
+    };
+    render.commands.push(command);
+}
+
+#[inline(always)]
 pub fn rectangle(pos: impl Into<Vec2>, size: impl Into<Vec2>) {
     rectangle_rot(pos, size, 0.0)
 }
 
+#[inline(always)]
 pub fn rectangle_rot(pos: impl Into<Vec2>, size: impl Into<Vec2>, rotation: impl IntoFl) {
     rectangle_rounded(pos, size, rotation, [0.0; 4])
 }
@@ -335,7 +621,7 @@ pub fn rectangle_rounded(
             pos: pos.into(),
             size: size.into(),
             rotation: rotation.into_fl(),
-            round_corners: corner_radii.map(|n| n.into_fl()),
+            corner_radii: corner_radii.map(|n| n.into_fl()),
         },
     };
     render.commands.push(command);
@@ -376,46 +662,48 @@ pub fn present() {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Present command encoder"),
         });
-    let (vertices, indices) = state.care_render.read().render();
-    upload_buffer(
-        &state.device,
-        &state.queue,
-        &state.vertex_buffer_2d,
-        bytemuck::cast_slice(&vertices),
-    );
-    upload_buffer(
-        &state.device,
-        &state.queue,
-        &state.index_buffer_2d,
-        bytemuck::cast_slice(&indices),
-    );
-    let vert = state.vertex_buffer_2d.read();
-    let idx = state.index_buffer_2d.read();
-    {
-        // Render pass time
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("2D Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-        render_pass.set_pipeline(&state.render_pipeline_2d);
-        render_pass.set_vertex_buffer(0, vert.slice(..));
-        render_pass.set_index_buffer(idx.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+    let draw_calls = state.care_render.write().render();
+    for draw_call in draw_calls {
+        upload_buffer(
+            &state.device,
+            &state.queue,
+            &state.vertex_buffer_2d,
+            bytemuck::cast_slice(&draw_call.vertices),
+        );
+        upload_buffer(
+            &state.device,
+            &state.queue,
+            &state.index_buffer_2d,
+            bytemuck::cast_slice(&draw_call.indices),
+        );
+        let vert = state.vertex_buffer_2d.read();
+        let idx = state.index_buffer_2d.read();
+        {
+            // Render pass time
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("2D Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            render_pass.set_pipeline(&state.render_pipeline_2d);
+            render_pass.set_vertex_buffer(0, vert.slice(..));
+            render_pass.set_index_buffer(idx.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..draw_call.indices.len() as u32, 0, 0..1);
+        }
     }
     state.queue.submit([encoder.finish()]);
     output.present();

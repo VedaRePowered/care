@@ -58,19 +58,54 @@ macro_rules! impl_vec_n {
             pub fn new( $($name: impl IntoFl,)* ) -> Self {
                 Self($inner::new( $($name.into_fl(),)* ))
             }
-            #[inline(always)]
-            pub fn x(&self) -> Fl {
-                self.0.x
-            }
-            #[inline(always)]
-            pub fn y(&self) -> Fl {
-                self.0.y
-            }
+            $(
+                #[inline(always)]
+                pub fn $name(&self) -> Fl {
+                    self.0.$name
+                }
+            )*
+
         }
         impl<$($ty_name: IntoFl,)*> From<($($ty_name,)*)> for $vec {
             #[inline(always)]
             fn from(($($name,)*): ($($ty_name,)*)) -> Self {
                 Self::new($($name,)*)
+            }
+        }
+
+        impl ::std::ops::Mul<$vec> for $vec {
+            type Output = $vec;
+
+            #[inline(always)]
+            fn mul(self, rhs: Self) -> Self::Output {
+                Self::new($(self.$name() * rhs.$name(),)*)
+            }
+        }
+
+        impl ::std::ops::Mul<Fl> for $vec {
+            type Output = $vec;
+
+            #[inline(always)]
+            fn mul(self, rhs: Fl) -> Self::Output {
+                Self(self.0 * rhs)
+            }
+        }
+
+        impl ::std::ops::Div<$vec> for $vec {
+            type Output = $vec;
+
+            #[inline(always)]
+            fn div(self, rhs: Self) -> Self::Output {
+                Self::new($(self.$name() / rhs.$name(),)*)
+            }
+        }
+
+        impl ::std::ops::Div<Fl> for $vec {
+            type Output = $vec;
+
+            #[inline(always)]
+            fn div(self, rhs: Fl) -> Self::Output {
+                Self(self.0 / rhs)
             }
         }
     };
@@ -83,5 +118,17 @@ impl_vec_n!(Vec4, Vector4; x: T, y: U, z: V, w: W);
 impl Mat4 {
     pub fn ident() -> Self {
         Mat4(Matrix4::identity())
+    }
+}
+
+impl Mat3 {
+    pub fn ident() -> Self {
+        Mat3(Matrix3::identity())
+    }
+}
+
+impl Mat2 {
+    pub fn ident() -> Self {
+        Mat2(Matrix2::identity())
     }
 }
