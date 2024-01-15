@@ -4,7 +4,8 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    fmt::Display,
+    fmt::{Debug, Display},
+    fs,
     path::Path,
     sync::{Arc, OnceLock},
     time::Instant,
@@ -14,6 +15,7 @@ use bytemuck::{Pod, Zeroable};
 use image::{DynamicImage, EncodableLayout};
 use parking_lot::RwLock;
 use pollster::FutureExt;
+use rusttype::gpu_cache::Cache as FontCache;
 use wgpu::{
     Adapter, Buffer, Device, Instance, Limits, Queue, RenderPipeline, Surface, VertexAttribute,
 };
@@ -53,14 +55,22 @@ impl Texture {
     pub fn new_from_file_format(file_data: &[u8]) {
         todo!()
     }
-    pub fn new_fill(size: impl Into<Vec2>, colour: Vec4) {
-        todo!()
+    pub fn new_fill(width: u32, height: u32, colour: impl Into<Vec4>) -> Self {
+        let c = colour.into() * 255.9;
+        Self::new_from_data(
+            width,
+            height,
+            (0..width * height)
+                .flat_map(|_| [c.x() as u8, c.y() as u8, c.z() as u8, c.w() as u8])
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
     }
     pub fn new_from_image(img: DynamicImage) -> Self {
         Self::new_from_data(img.width(), img.height(), img.to_rgba8().as_bytes())
     }
     pub fn new_from_data(width: u32, height: u32, data: &[u8]) -> Self {
-        let mut state = GRAPHICS_STATE.get().expect("Graphics not initialized");
+        let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
         let size = wgpu::Extent3d {
             width,
             height,
@@ -108,8 +118,29 @@ impl Texture {
             sampler,
         }))
     }
-
-    fn size(&self) -> Vec2 {
+    pub fn upload_region(&self, data: &[u8], x: u32, y: u32, width: u32, height: u32) {
+        let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
+        state.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &self.0.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x, y, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+    pub fn size(&self) -> Vec2 {
         self.0.size
     }
 }
@@ -134,6 +165,21 @@ impl TextureHandle {
                 resource: wgpu::BindingResource::Sampler(&self.sampler),
             },
         ]
+    }
+}
+
+#[derive(Debug)]
+struct Font(Arc<rusttype::Font<'static>>);
+
+impl Font {
+    pub fn new(file: impl AsRef<Path>) -> Self {
+        Font::new_from_vec(fs::read(file).unwrap())
+    }
+    pub fn new_from_vec(bytes: Vec<u8>) -> Self {
+        Font(Arc::new(rusttype::Font::try_from_vec(bytes).unwrap()))
+    }
+    pub fn new_from_bytes(bytes: &'static [u8]) -> Self {
+        Font(Arc::new(rusttype::Font::try_from_bytes(bytes).unwrap()))
     }
 }
 
@@ -172,6 +218,7 @@ enum DrawCommandData {
     },
     Text {
         pos: Vec2,
+        rotation: Fl,
         text: Cow<'static, str>,
     },
     Texture {
@@ -216,7 +263,6 @@ impl Vertex2d {
     }
 }
 
-#[derive(Debug)]
 struct CareRenderState {
     transform_stack: Vec<Mat3>,
     current_transform: Mat3,
@@ -224,6 +270,22 @@ struct CareRenderState {
     current_surface: WindowId,
     commands: Vec<DrawCommand>,
     max_textures: usize,
+    font_cache: FontCache<'static>,
+    font_cache_texture: OnceLock<Texture>,
+    default_font: Font,
+}
+
+impl Debug for CareRenderState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CareRenderState")
+            .field("transform_stack", &self.transform_stack)
+            .field("current_transform", &self.current_transform)
+            .field("current_colour", &self.current_colour)
+            .field("current_surface", &self.current_surface)
+            .field("commands", &self.commands)
+            .field("max_textures", &self.max_textures)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -348,6 +410,13 @@ impl CareRenderState {
                     cdc.indices
                         .extend_from_slice(&[n, n + 1, n + 2, n + 2, n + 1, n + 3])
                 }
+                DrawCommandData::Text {
+                    text,
+                    pos,
+                    rotation,
+                } => {
+                    todo!()
+                }
                 DrawCommandData::Triangle {
                     verts: _,
                     tex_uvs: _,
@@ -357,7 +426,6 @@ impl CareRenderState {
                     radius: _,
                     elipseness: _,
                 } => todo!(),
-                DrawCommandData::Text { pos: _, text: _ } => todo!(),
                 DrawCommandData::Line { points: _, ends: _ } => todo!(),
             }
         }
@@ -444,6 +512,9 @@ impl GraphicsState {
             max_textures: (limits.max_bindings_per_bind_group / 2)
                 .min(limits.max_sampled_textures_per_shader_stage)
                 .min(limits.max_samplers_per_shader_stage) as usize,
+            font_cache: FontCache::builder().dimensions(1024, 1024).build(),
+            font_cache_texture: OnceLock::new(),
+            default_font: Font::new_from_bytes(include_bytes!("Urbanist-Regular.ttf")),
         };
 
         let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d, bind_group_layouts_2d) = {
@@ -573,6 +644,9 @@ pub fn init() {
             ],
         )
     });
+    state
+        .placeholder_texture
+        .get_or_init(|| Texture::new_fill(1024, 1024, (0, 0, 0, 0)));
 }
 
 pub fn set_colour(colour: impl Into<Vec4>) {
@@ -584,7 +658,40 @@ pub fn set_colour(colour: impl Into<Vec4>) {
         .current_colour = colour.into();
 }
 
-pub fn text(text: impl Display, pos: impl Into<Vec2>) {}
+pub fn text(text: impl Display, pos: impl Into<Vec2>) {
+    let mut render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .write();
+    let pos = pos.into();
+    let text = text.to_string();
+    let glyphs: Vec<_> = render.default_font.0.layout(
+        &text,
+        rusttype::Scale { x: 18.0, y: 18.0 },
+        rusttype::Point {
+            x: pos.x(),
+            y: pos.y(),
+        },
+    ).collect();
+    for glyph in glyphs {
+        render.font_cache.queue_glyph(0, glyph.clone());
+        let rect = render.font_cache.rect_for(0, &glyph).unwrap().unwrap();
+        let command = DrawCommand {
+            transform: render.current_transform.clone(),
+            colour: render.current_colour,
+            data: DrawCommandData::TextRect {
+                texture: render.font_cache_texture.get().unwrap().clone(),
+                pos: Vec2::new(glyph.position().x, glyph.position().y),
+                scale: Vec2::new(1, 1),
+                source: (Vec2::new(rect.0.min.x, rect.0.min.y), Vec2::new(rect.0.max.x-rect.0.min.x, rect.0.max.y-rect.0.min.y)),
+                rotation: 0.0,
+                corner_radii: [0.0; 4],
+            },
+        };
+        render.commands.push(command);
+    }
+}
 
 #[inline(always)]
 pub fn texture(tex: &Texture, pos: impl Into<Vec2>) {
