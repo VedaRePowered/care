@@ -1,13 +1,14 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{sync::atomic::{AtomicBool, Ordering}, time::Instant};
 
 use parking_lot::RwLock;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder}, event::{WindowEvent, Event},
+    window::{Window, WindowBuilder}, event::{WindowEvent, Event, KeyEvent, ElementState},
+    keyboard::{Key as WKey, NamedKey, SmolStr},
 };
 
-use crate::math::Vec2;
+use crate::{math::Vec2, prelude::Key};
 
 static HAS_INITIALIZED: AtomicBool = AtomicBool::new(false);
 thread_local! {
@@ -101,6 +102,26 @@ pub fn open_with_settings(settings: WindowSettings) {
     });
 }
 
+fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
+    match key {
+        WKey::Named(NamedKey::ArrowUp) => Key::Up,
+        WKey::Named(NamedKey::ArrowDown) => Key::Down,
+        WKey::Named(NamedKey::ArrowLeft) => Key::Left,
+        WKey::Named(NamedKey::ArrowRight) => Key::Right,
+        WKey::Named(NamedKey::Space) => Key::Space,
+        WKey::Named(NamedKey::Enter) => Key::Enter,
+        WKey::Named(NamedKey::Escape) => Key::Escape,
+        WKey::Named(NamedKey::Backspace) => Key::Backspace,
+        WKey::Named(NamedKey::Delete) => Key::Delete,
+        WKey::Named(NamedKey::Shift) => Key::Shift,
+        WKey::Named(NamedKey::Control) => Key::Control,
+        WKey::Named(NamedKey::Alt) => Key::Alt,
+        WKey::Named(NamedKey::Meta) => Key::Meta,
+        WKey::Character(ch) => Key::Char(ch.chars().next().unwrap()),
+        _ => Key::Unknown,
+    }
+}
+
 // Window implementation of the event loop running function
 pub(crate) fn run(mut loop_fn: impl FnMut()) {
     EVENT_LOOP.with(move |el_call| {
@@ -112,6 +133,14 @@ pub(crate) fn run(mut loop_fn: impl FnMut()) {
             match ev {
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                     event_loop.exit();
+                }
+                Event::WindowEvent { event: WindowEvent::KeyboardInput { event: KeyEvent { logical_key, state, repeat, .. }, .. }, .. } => {
+                    if !repeat {
+                        crate::event::handle_event(crate::event::Event {
+                            timestamp: Instant::now(),
+                            data: crate::event::EventData::KeyEvent { key: convert_key(logical_key), pressed: state.is_pressed() },
+                        });
+                    }
                 }
                 Event::AboutToWait => {
                     loop_fn();

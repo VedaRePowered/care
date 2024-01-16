@@ -1,30 +1,34 @@
 use std::collections::HashSet;
+use std::io::Write;
 
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{spanned::Spanned, Block, Expr, ItemFn, ItemStatic, Stmt};
 
 #[rustfmt::skip]
 fn dereference_state_vars(expr: &mut Expr, vars: &HashSet<String>) {
+    let mut file = std::fs::File::options().append(true).open("/home/ben1jen/gitlab/care/out.txt").unwrap();
     match expr {
         Expr::Await(syn::ExprAwait { base: expr, .. }) |
         Expr::Cast(syn::ExprCast { expr, .. }) |
         Expr::Field(syn::ExprField { base: expr, .. }) |
         Expr::Group(syn::ExprGroup { expr, .. }) |
-        Expr::If(syn::ExprIf { cond: expr, .. }) |
         Expr::Let(syn::ExprLet { expr, .. }) |
         Expr::Paren(syn::ExprParen { expr, .. }) |
-        Expr::Range(syn::ExprRange { start: Some(expr), end: None, .. } | syn::ExprRange { start: None, end: Some(expr), .. }) |
+        Expr::Range(syn::ExprRange { start: Some(expr), end: None, .. } |
+                    syn::ExprRange { start: None, end: Some(expr), .. }) |
         Expr::Reference(syn::ExprReference { expr, .. }) |
         Expr::Return(syn::ExprReturn { expr: Some(expr), .. }) |
         Expr::Try(syn::ExprTry { expr, .. }) |
         Expr::Unary(syn::ExprUnary { expr, .. }) |
+        Expr::Break(syn::ExprBreak { expr: Some(expr), .. }) |
         Expr::Yield(syn::ExprYield { expr: Some(expr), .. }) => {
             dereference_state_vars(expr, vars);
         }
         Expr::Assign(syn::ExprAssign { left: expr, right: expr2, .. }) |
         Expr::Index(syn::ExprIndex { expr, index: expr2, .. }) |
         Expr::Range(syn::ExprRange { start: Some(expr), end: Some(expr2), .. }) |
+        Expr::Binary(syn::ExprBinary { left: expr, right: expr2, .. }) |
         Expr::Repeat(syn::ExprRepeat { expr, len: expr2, .. }) => {
             dereference_state_vars(expr, vars);
             dereference_state_vars(expr2, vars);
@@ -69,10 +73,22 @@ fn dereference_state_vars(expr: &mut Expr, vars: &HashSet<String>) {
                 dereference_state_vars(&mut field.expr, vars);
             }
         }
+        Expr::If(syn::ExprIf { cond: expr, then_branch: block, else_branch, .. }) => {
+            dereference_state_vars(expr, vars);
+            for stmt in &mut block.stmts {
+                dereference_state_vars_stmt(stmt, vars)
+            }
+            if let Some(else_branch) = else_branch {
+                dereference_state_vars(&mut else_branch.1, vars);
+            }
+        }
         Expr::Path(syn::ExprPath { path: syn::Path { leading_colon: None, segments }, .. }) => {
+            writeln!(file, "Segments: {:?}, Len: {}", segments.iter().map(|ps| ps.ident.to_string()).collect::<Vec<_>>(), segments.len()).unwrap();
             if segments.len() == 1 {
                 if let Some(seg) = segments.first_mut() {
+                    writeln!(file, " -> single-seg, testing with {vars:?}").unwrap();
                     if vars.contains(&seg.ident.to_string()) {
+                        writeln!(file, " -> Replaced").unwrap();
                         *expr = Expr::Paren(syn::ExprParen {
                             attrs: Vec::new(),
                             paren_token: syn::token::Paren(seg.span()),
@@ -121,7 +137,7 @@ fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::T
         .split(",")
         .filter(|s| !s.is_empty())
         .map(|p| {
-            p.split_once(':').unwrap().0.to_string()
+            p.split_once(':').unwrap().0.trim().to_string()
         })
         .collect();
 

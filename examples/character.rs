@@ -1,7 +1,7 @@
 use care::prelude::*;
 
 #[care::state]
-static texture: Texture = Texture::new("test.png");
+static texture: Texture = Texture::new("examples/test.png");
 
 #[care::state]
 static pos: Vec2 = Vec2::new(400, 300);
@@ -9,20 +9,22 @@ static pos: Vec2 = Vec2::new(400, 300);
 #[care::update]
 fn update(delta: f32) {
     if care::keyboard::is_down(Key::Up) {
-        pos.y += delta*100.0;
+        pos.0.y -= delta*200.0;
     }
     if care::keyboard::is_down(Key::Down) {
-        pos.y -= delta*100.0;
+        pos.0.y += delta*200.0;
     }
     if care::keyboard::is_down(Key::Right) {
-        pos.x += delta*100.0;
+        pos.0.x += delta*200.0;
     }
     if care::keyboard::is_down(Key::Left) {
-        pos.x -= delta*100.0;
+        pos.0.x -= delta*200.0;
     }
 }
 
 #[care::draw]
 fn draw() {
-    care::graphics::texture(texture, pos);
+    care::graphics::texture(&texture, pos-texture.size()/2.0);
 }
+
+care::main!();
