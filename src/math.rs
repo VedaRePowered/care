@@ -150,3 +150,14 @@ impl Mat2 {
         Mat2(Matrix2::identity())
     }
 }
+
+/// Good set of default imports
+pub mod prelude {
+    pub use super::Fl;
+    pub use super::Vec2;
+    pub use super::Vec3;
+    pub use super::Vec4;
+    pub use super::Mat2;
+    pub use super::Mat3;
+    pub use super::Mat4;
+}

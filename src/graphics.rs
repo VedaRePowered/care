@@ -1,5 +1,5 @@
 //! Graphics functions, all of which will panic if called from a thread that is not the main
-//! thread, or if any function is called before calling [init()] from the main thread.
+//! thread, or if any function is called before calling [init] from the main thread.
 
 use std::{
     collections::HashMap,
@@ -1008,4 +1008,10 @@ pub fn present() {
     output.present();
 
     state.care_render.write().reset();
+}
+
+/// Useful default struct imports
+pub mod prelude {
+    pub use super::Texture;
+    pub use super::Font;
 }
