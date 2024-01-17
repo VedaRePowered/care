@@ -1,15 +1,19 @@
 use nalgebra::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
 
 #[cfg(not(feature = "f64"))]
+/// Floating point type used by the library
 pub type Fl = f32;
 #[cfg(not(features = "f64"))]
 pub use std::f32 as std_fl;
 #[cfg(feature = "f64")]
+/// Floating point type used by the library
 pub type Fl = f64;
 #[cfg(features = "f64")]
 pub use std::f64 as std_fl;
 
+/// Trait for numbers
 pub trait IntoFl {
+    /// Convert into a float
     fn into_fl(self) -> Fl;
 }
 

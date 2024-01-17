@@ -7,7 +7,6 @@ use syn::{spanned::Spanned, Block, Expr, ItemFn, ItemStatic, Stmt};
 
 #[rustfmt::skip]
 fn dereference_state_vars(expr: &mut Expr, vars: &HashSet<String>) {
-    let mut file = std::fs::File::options().append(true).open("/home/ben1jen/gitlab/care/out.txt").unwrap();
     match expr {
         Expr::Await(syn::ExprAwait { base: expr, .. }) |
         Expr::Cast(syn::ExprCast { expr, .. }) |
@@ -83,12 +82,9 @@ fn dereference_state_vars(expr: &mut Expr, vars: &HashSet<String>) {
             }
         }
         Expr::Path(syn::ExprPath { path: syn::Path { leading_colon: None, segments }, .. }) => {
-            writeln!(file, "Segments: {:?}, Len: {}", segments.iter().map(|ps| ps.ident.to_string()).collect::<Vec<_>>(), segments.len()).unwrap();
             if segments.len() == 1 {
                 if let Some(seg) = segments.first_mut() {
-                    writeln!(file, " -> single-seg, testing with {vars:?}").unwrap();
                     if vars.contains(&seg.ident.to_string()) {
-                        writeln!(file, " -> Replaced").unwrap();
                         *expr = Expr::Paren(syn::ExprParen {
                             attrs: Vec::new(),
                             paren_token: syn::token::Paren(seg.span()),

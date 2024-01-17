@@ -39,6 +39,7 @@ struct GraphicsState {
 }
 
 #[derive(Debug, Clone)]
+/// A high-level object to wrap textures
 pub struct Texture(Arc<TextureHandle>);
 
 impl PartialEq for Texture {
@@ -48,12 +49,14 @@ impl PartialEq for Texture {
 }
 
 impl Texture {
+    /// Create the texture by loading an image from the filesystem
     pub fn new(filename: impl AsRef<Path>) -> Self {
         Self::new_from_image(image::io::Reader::open(filename).unwrap().decode().unwrap())
     }
     pub fn new_from_file_format(file_data: &[u8]) {
         todo!()
     }
+    /// Create a new texture by filling it up in a single colour
     pub fn new_fill(width: u32, height: u32, colour: impl Into<Vec4>) -> Self {
         let c = colour.into() * 255.9;
         Self::new_from_data(
@@ -65,9 +68,11 @@ impl Texture {
                 .as_slice(),
         )
     }
+    /// Create a new texture out of an image from the image crate
     pub fn new_from_image(img: DynamicImage) -> Self {
         Self::new_from_data(img.width(), img.height(), img.to_rgba8().as_bytes())
     }
+    /// Create a new texture out of a size and raw data
     pub fn new_from_data(width: u32, height: u32, data: &[u8]) -> Self {
         let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
         let size = wgpu::Extent3d {
@@ -117,6 +122,7 @@ impl Texture {
             sampler,
         }))
     }
+    /// Upload data to a specific region of the texture
     pub fn upload_region(&self, data: &[u8], x: u32, y: u32, width: u32, height: u32) {
         let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
         state.queue.write_texture(
@@ -139,6 +145,7 @@ impl Texture {
             },
         );
     }
+    /// Get the size of the texture
     pub fn size(&self) -> Vec2 {
         self.0.size
     }
@@ -168,6 +175,7 @@ impl TextureHandle {
 }
 
 #[derive(Debug, Clone)]
+/// A font that can be used to display text
 pub struct Font(Arc<(rusttype::Font<'static>, u32)>);
 
 fn next_font_id() -> u32 {
@@ -178,6 +186,7 @@ fn next_font_id() -> u32 {
 }
 
 impl Font {
+    /// Create a new font from a font file
     pub fn new(file: impl AsRef<Path>) -> Self {
         Font::new_from_vec(fs::read(file).unwrap())
     }
@@ -705,6 +714,7 @@ pub fn init() {
         .get_or_init(|| Texture::new_fill(1024, 1024, (0, 0, 0, 0)));
 }
 
+/// Set the colour used for rendering
 pub fn set_colour(colour: impl Into<Vec4>) {
     GRAPHICS_STATE
         .get()
@@ -714,6 +724,7 @@ pub fn set_colour(colour: impl Into<Vec4>) {
         .current_colour = colour.into();
 }
 
+/// Render a line of text to the screen
 pub fn text(text: impl Display, pos: impl Into<Vec2>) {
     let mut render = GRAPHICS_STATE
         .get()
@@ -762,16 +773,19 @@ pub fn text(text: impl Display, pos: impl Into<Vec2>) {
 }
 
 #[inline(always)]
+/// Render a texture
 pub fn texture(tex: &Texture, pos: impl Into<Vec2>) {
     texture_scale(tex, pos, (1, 1))
 }
 
 #[inline(always)]
+/// Render a texture, with custom scale
 pub fn texture_scale(tex: &Texture, pos: impl Into<Vec2>, scale: impl Into<Vec2>) {
     texture_source(tex, pos, scale, (0, 0), tex.size())
 }
 
 #[inline(always)]
+/// Render a texture, with custom scale, and source region
 pub fn texture_source(
     tex: &Texture,
     pos: impl Into<Vec2>,
@@ -783,6 +797,7 @@ pub fn texture_source(
 }
 
 #[inline(always)]
+/// Render a texture, with custom scale, source region, and rotation
 pub fn texture_rot(
     tex: &Texture,
     pos: impl Into<Vec2>,
@@ -802,6 +817,7 @@ pub fn texture_rot(
     )
 }
 
+/// Render a texture with all settings
 pub fn texture_rounded(
     tex: &Texture,
     pos: impl Into<Vec2>,
@@ -834,15 +850,18 @@ pub fn texture_rounded(
 }
 
 #[inline(always)]
+/// Render a rectangle
 pub fn rectangle(pos: impl Into<Vec2>, size: impl Into<Vec2>) {
     rectangle_rot(pos, size, 0.0)
 }
 
 #[inline(always)]
+/// Render a rectangle, with a rotation
 pub fn rectangle_rot(pos: impl Into<Vec2>, size: impl Into<Vec2>, rotation: impl IntoFl) {
     rectangle_rounded(pos, size, rotation, [0.0; 4])
 }
 
+/// Render a rectangle, with a rotation, and rounding corners
 pub fn rectangle_rounded(
     pos: impl Into<Vec2>,
     size: impl Into<Vec2>,
@@ -883,6 +902,7 @@ fn upload_buffer(device: &Device, queue: &Queue, buffer_lock: &RwLock<Buffer>, d
     queue.write_buffer(&buffer, 0, data)
 }
 
+/// Present the current frame
 pub fn present() {
     // Lets try render some stuff oh boy!
     let state = GRAPHICS_STATE.get().expect("Graphics not initialized");

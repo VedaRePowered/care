@@ -6,7 +6,7 @@ static time: f32 = 0.0;
 
 #[care::update]
 fn update(delta: f32) {
-    *time += delta;
+    time += delta;
 }
 
 #[care::draw]
