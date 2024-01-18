@@ -5,7 +5,7 @@ use rusttype::{gpu_cache::Cache as FontCache, PositionedGlyph};
 use wgpu::VertexAttribute;
 use winit::window::WindowId;
 
-use crate::math::{Fl, Mat3, Vec2, Vec4};
+use crate::{math::{Fl, Mat3, Vec2, Vec4}, prelude::Mat2};
 
 use super::{Texture, Font};
 
@@ -33,6 +33,18 @@ pub(crate) enum DrawCommandData {
         rotation: Fl,
         corner_radii: [Fl; 4],
     },
+    Texture {
+        texture: Texture,
+        pos: Vec2,
+        scale: Vec2,
+        source: (Vec2, Vec2),
+        rotation: Fl,
+        corner_radii: [Fl; 4],
+    },
+    TextChar {
+        glyph: PositionedGlyph<'static>,
+        font: u32,
+    },
     Triangle {
         verts: [Vec2; 3],
         tex_uvs: Option<(Texture, [Vec2; 3])>,
@@ -41,18 +53,6 @@ pub(crate) enum DrawCommandData {
         center: Vec2,
         radius: Fl,
         elipseness: Vec2,
-    },
-    TextChar {
-        glyph: PositionedGlyph<'static>,
-        font: u32,
-    },
-    Texture {
-        texture: Texture,
-        pos: Vec2,
-        scale: Vec2,
-        source: (Vec2, Vec2),
-        rotation: Fl,
-        corner_radii: [Fl; 4],
     },
     Line {
         points: Vec<(Vec2, Fl, LineJoinStyle)>,
@@ -73,13 +73,13 @@ pub(crate) struct Vertex2d {
     position: [f32; 2],
     uv: [f32; 2],
     colour: [u8; 4],
-    rounding: [f32; 2],
+    rounding: f32,
     tex: u32,
 }
 
 impl Vertex2d {
     pub fn descriptor() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRS: [VertexAttribute; 5] = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Unorm8x4, 3 => Float32x2, 4 => Uint32];
+        const ATTRS: [VertexAttribute; 5] = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Unorm8x4, 3 => Float32, 4 => Uint32];
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -171,28 +171,28 @@ impl CareRenderState {
                         position: vert_pos((pos.0.x, pos.0.y), rotation),
                         uv: [0.0, 0.0],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[0],
                         tex: 0,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x + size.0.x, pos.0.y), rotation),
                         uv: [1.0, 0.0],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[1],
                         tex: 0,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x, pos.0.y + size.0.y), rotation),
                         uv: [0.0, 1.0],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[3],
                         tex: 0,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), rotation),
                         uv: [1.0, 1.0],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[2],
                         tex: 0,
                     });
                     cdc.indices
@@ -216,28 +216,28 @@ impl CareRenderState {
                         position: vert_pos((pos.0.x, pos.0.y), rotation),
                         uv: [uv_base.x(), uv_base.y()],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[0],
                         tex,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x + size.0.x, pos.0.y), rotation),
                         uv: [uv_base.x() + uv_size.x(), uv_base.y()],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[1],
                         tex,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x, pos.0.y + size.0.y), rotation),
                         uv: [uv_base.x(), uv_base.y() + uv_size.y()],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[3],
                         tex,
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), rotation),
                         uv: [uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y()],
                         colour,
-                        rounding: [0.0, 0.0],
+                        rounding: corner_radii[2],
                         tex,
                     });
                     cdc.indices
@@ -256,28 +256,28 @@ impl CareRenderState {
                             position: vert_pos((pos.0.x, pos.0.y), 0.0),
                             uv: [uv_base.x(), uv_base.y()],
                             colour,
-                            rounding: [0.0, 0.0],
+                            rounding: 0.0,
                             tex,
                         });
                         cdc.vertices.push(Vertex2d {
                             position: vert_pos((pos.0.x + size.0.x, pos.0.y), 0.0),
                             uv: [uv_base.x() + uv_size.x(), uv_base.y()],
                             colour,
-                            rounding: [0.0, 0.0],
+                            rounding: 0.0,
                             tex,
                         });
                         cdc.vertices.push(Vertex2d {
                             position: vert_pos((pos.0.x, pos.0.y + size.0.y), 0.0),
                             uv: [uv_base.x(), uv_base.y() + uv_size.y()],
                             colour,
-                            rounding: [0.0, 0.0],
+                            rounding: 0.0,
                             tex,
                         });
                         cdc.vertices.push(Vertex2d {
                             position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), 0.0),
                             uv: [uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y()],
                             colour,
-                            rounding: [0.0, 0.0],
+                            rounding: 0.0,
                             tex,
                         });
                         cdc.indices
@@ -299,7 +299,7 @@ impl CareRenderState {
                             position: vert_pos((pos.x(), pos.y()), 0.0),
                             uv: [uv.x(), uv.y()],
                             colour,
-                            rounding: [0.0, 0.0],
+                            rounding: 0.0,
                             tex,
                         });
                     }
@@ -307,10 +307,52 @@ impl CareRenderState {
                         .extend_from_slice(&[n, n + 1, n + 2])
                 }
                 DrawCommandData::Circle {
-                    center: _,
-                    radius: _,
-                    elipseness: _,
-                } => todo!(),
+                    center,
+                    radius,
+                    elipseness,
+                } => {
+                    let n = cdc.vertices.len() as u32;
+                    let sqrt_3 = (3.0f32).sqrt();
+                    let left = Vec2::new(-sqrt_3*radius, -radius);
+                    let right = Vec2::new(sqrt_3*radius, -radius);
+                    let top = Vec2::new(0.0, 2.0*radius);
+                    let e_dir = elipseness.normalize_or(Vec2::new(1, 0));
+                    let e_tan = e_dir.tangent();
+                    let e_len = elipseness.length()+1.0;
+                    let e_mat = Mat2::new(
+                        e_dir.x()*e_len, -e_tan.x(),
+                        e_dir.y()*e_len, -e_tan.y(),
+                    );
+                    let left = center + &e_mat*left;
+                    let right = center + &e_mat*right;
+                    let top = center + &e_mat*top;
+                    let left_uv = Vec2::new((1.0-sqrt_3)/2.0, 0.0);
+                    let right_uv = Vec2::new(1.0+(sqrt_3-1.0)/2.0, 0.0);
+                    let top_uv = Vec2::new(0.5, 1.5);
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos((left.x(), left.y()), 0.0),
+                        uv: [left_uv.x(), left_uv.y()],
+                        colour,
+                        rounding: 0.5,
+                        tex: 0,
+                    });
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos((top.x(), top.y()), 0.0),
+                        uv: [top_uv.x(), top_uv.y()],
+                        colour,
+                        rounding: 1.0,
+                        tex: 0,
+                    });
+                    cdc.vertices.push(Vertex2d {
+                        position: vert_pos((right.x(), right.y()), 0.0),
+                        uv: [right_uv.x(), right_uv.y()],
+                        colour,
+                        rounding: 0.5,
+                        tex: 0,
+                    });
+                    cdc.indices
+                        .extend_from_slice(&[n, n + 1, n + 2])
+                }
                 DrawCommandData::Line { points: _, ends: _ } => todo!(),
             }
         }

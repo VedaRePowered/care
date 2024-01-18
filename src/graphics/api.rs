@@ -198,6 +198,70 @@ pub fn rectangle_rounded(
     render.commands.push(command);
 }
 
+/// Render a triangle (in a solid colour)
+pub fn triangle(points: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>)) {
+    let mut render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .write();
+    let command = DrawCommand {
+        transform: render.current_transform.clone(),
+        colour: render.current_colour,
+        data: DrawCommandData::Triangle {
+            verts: [points.0.into(), points.1.into(), points.2.into()],
+            tex_uvs: None,
+        },
+    };
+    render.commands.push(command);
+}
+
+/// Render a triangle with a texture
+pub fn triangle_textured(
+    points: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>),
+    tex: &Texture,
+    uvs: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>),
+) {
+    let mut render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .write();
+    let command = DrawCommand {
+        transform: render.current_transform.clone(),
+        colour: render.current_colour,
+        data: DrawCommandData::Triangle {
+            verts: [points.0.into(), points.1.into(), points.2.into()],
+            tex_uvs: Some((tex.clone(), [uvs.0.into(), uvs.1.into(), uvs.2.into()])),
+        },
+    };
+    render.commands.push(command);
+}
+
+/// Render a circle
+pub fn circle(center: impl Into<Vec2>, radius: impl IntoFl) {
+    elipse(center, radius, (0, 0))
+}
+
+/// Render a circle
+pub fn elipse(center: impl Into<Vec2>, radius: impl IntoFl, elipseness: impl Into<Vec2>) {
+    let mut render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .write();
+    let command = DrawCommand {
+        transform: render.current_transform.clone(),
+        colour: render.current_colour,
+        data: DrawCommandData::Circle {
+            center: center.into(),
+            radius: radius.into_fl(),
+            elipseness: elipseness.into(),
+        },
+    };
+    render.commands.push(command);
+}
+
 fn upload_buffer(device: &Device, queue: &Queue, buffer_lock: &RwLock<Buffer>, data: &[u8]) {
     let mut buffer = buffer_lock.write();
     // TODO: Use map_async if possible

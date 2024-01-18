@@ -202,18 +202,38 @@ impl Mat2 {
     pub fn ident() -> Self {
         Mat2(Matrix2::identity())
     }
+    /// Create a new matrix from the 4 components, column major
+    pub fn new(x1: impl IntoFl, y1: impl IntoFl, x2: impl IntoFl, y2: impl IntoFl) -> Self {
+        Mat2(Matrix2::new(x1.into_fl(), y1.into_fl(), x2.into_fl(), y2.into_fl()))
+    }
 }
 
 impl Vec2 {
     #[inline]
     /// Return a version of this vector that has been rotated by `rotation` radians clockwise
-    pub fn rotated(&self, rotation: Fl) -> Vec2 {
+    pub fn rotated(&self, rotation: Fl) -> Self {
         let (s, c) = (rotation.sin(), rotation.cos());
-        Vec2::new(self.0.x*c - self.0.y*s, self.0.y*c + self.0.x*s)
+        Self::new(self.0.x*c + self.0.y*s, self.0.y*c - self.0.x*s)
+    }
+    /// Return a version of this vector that's been rotated by 90 degrees clockwise
+    pub fn tangent(&self) -> Self {
+        Self::new(self.0.y, -self.0.x)
+    }
+    /// Return the euclidian length (l1 norm) of this vector
+    pub fn length(&self) -> Fl {
+        (self.0.x + self.0.y).sqrt()
+    }
+    /// Return the euclidian length (l1 norm) of this vector
+    pub fn normalize_or(&self, other: Vec2) -> Self {
+        if self.length() <= 0.000001 {
+            other
+        } else {
+            *self / self.length()
+        }
     }
 }
 
-impl std::ops::Mul<Vec2> for Mat2 {
+impl std::ops::Mul<Vec2> for &Mat2 {
     type Output = Vec2;
 
     fn mul(self, rhs: Vec2) -> Self::Output {
