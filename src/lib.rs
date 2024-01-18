@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#[doc = include_str!("../readme.md")]
+#![doc = include_str!("../readme.md")]
 
 /// Global care configuration parameters
 pub mod config;
@@ -13,7 +13,7 @@ pub mod math;
 #[cfg(feature = "window")]
 /// Contains functions for working with window(s)
 pub mod window;
-// Stuff for working with a keyboard.
+/// Stuff for working with a keyboard.
 pub mod keyboard;
 /// Useful structs to have imported
 pub mod prelude;

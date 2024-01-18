@@ -1,8 +1,7 @@
 use std::collections::HashSet;
-use std::io::Write;
 
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::{spanned::Spanned, Block, Expr, ItemFn, ItemStatic, Stmt};
 
 #[rustfmt::skip]

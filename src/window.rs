@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder}, event::{WindowEvent, Event, KeyEvent, ElementState},
+    window::{Window, WindowBuilder}, event::{WindowEvent, Event, KeyEvent},
     keyboard::{Key as WKey, NamedKey, SmolStr},
 };
 
