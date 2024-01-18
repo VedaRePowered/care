@@ -130,7 +130,6 @@ impl CareRenderState {
     }
     pub fn render(&mut self) -> Vec<DrawCall<Vertex2d>> {
         let screen_size = Vec2::new(800, 600);
-        let vert_pos = |x: Fl, y: Fl| [(x / screen_size.0.x) as f32, (y / screen_size.0.y) as f32];
         let mut draw_calls = Vec::new();
         let mut cdc = DrawCall::default();
         let mut use_tex = |texture: &Texture, cdc: &mut DrawCall<Vertex2d>| {
@@ -150,6 +149,10 @@ impl CareRenderState {
             }) as u32
         };
         for command in self.commands.drain(..) {
+            let vert_pos = |v: (Fl, Fl), rot: Fl| {
+                let v = (&command.transform) * Vec2::from(v).rotated(rot);
+                [(v.x() / screen_size.0.x) as f32, (v.y() / screen_size.0.y) as f32]
+            };
             let colour = [
                 (command.colour.0.x * 255.99) as u8,
                 (command.colour.0.y * 255.99) as u8,
@@ -161,32 +164,32 @@ impl CareRenderState {
                     pos,
                     size,
                     rotation,
-                    corner_radii: round_corners,
+                    corner_radii,
                 } => {
                     let n = cdc.vertices.len() as u32;
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x, pos.0.y),
+                        position: vert_pos((pos.0.x, pos.0.y), rotation),
                         uv: [0.0, 0.0],
                         colour,
                         rounding: [0.0, 0.0],
                         tex: 0,
                     });
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x + size.0.x, pos.0.y),
+                        position: vert_pos((pos.0.x + size.0.x, pos.0.y), rotation),
                         uv: [1.0, 0.0],
                         colour,
                         rounding: [0.0, 0.0],
                         tex: 0,
                     });
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x, pos.0.y + size.0.y),
+                        position: vert_pos((pos.0.x, pos.0.y + size.0.y), rotation),
                         uv: [0.0, 1.0],
                         colour,
                         rounding: [0.0, 0.0],
                         tex: 0,
                     });
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x + size.0.x, pos.0.y + size.0.y),
+                        position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), rotation),
                         uv: [1.0, 1.0],
                         colour,
                         rounding: [0.0, 0.0],
@@ -210,28 +213,28 @@ impl CareRenderState {
                     let uv_base = source.0 / tex_size;
                     let uv_size = source.1 / tex_size;
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x, pos.0.y),
+                        position: vert_pos((pos.0.x, pos.0.y), rotation),
                         uv: [uv_base.x(), uv_base.y()],
                         colour,
                         rounding: [0.0, 0.0],
                         tex,
                     });
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x + size.0.x, pos.0.y),
+                        position: vert_pos((pos.0.x + size.0.x, pos.0.y), rotation),
                         uv: [uv_base.x() + uv_size.x(), uv_base.y()],
                         colour,
                         rounding: [0.0, 0.0],
                         tex,
                     });
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x, pos.0.y + size.0.y),
+                        position: vert_pos((pos.0.x, pos.0.y + size.0.y), rotation),
                         uv: [uv_base.x(), uv_base.y() + uv_size.y()],
                         colour,
                         rounding: [0.0, 0.0],
                         tex,
                     });
                     cdc.vertices.push(Vertex2d {
-                        position: vert_pos(pos.0.x + size.0.x, pos.0.y + size.0.y),
+                        position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), rotation),
                         uv: [uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y()],
                         colour,
                         rounding: [0.0, 0.0],
@@ -250,28 +253,28 @@ impl CareRenderState {
                         let uv_base = Vec2::new(rect.0.min.x, rect.0.min.y);
                         let uv_size = Vec2::new(rect.0.max.x, rect.0.max.y) - uv_base;
                         cdc.vertices.push(Vertex2d {
-                            position: vert_pos(pos.0.x, pos.0.y),
+                            position: vert_pos((pos.0.x, pos.0.y), 0.0),
                             uv: [uv_base.x(), uv_base.y()],
                             colour,
                             rounding: [0.0, 0.0],
                             tex,
                         });
                         cdc.vertices.push(Vertex2d {
-                            position: vert_pos(pos.0.x + size.0.x, pos.0.y),
+                            position: vert_pos((pos.0.x + size.0.x, pos.0.y), 0.0),
                             uv: [uv_base.x() + uv_size.x(), uv_base.y()],
                             colour,
                             rounding: [0.0, 0.0],
                             tex,
                         });
                         cdc.vertices.push(Vertex2d {
-                            position: vert_pos(pos.0.x, pos.0.y + size.0.y),
+                            position: vert_pos((pos.0.x, pos.0.y + size.0.y), 0.0),
                             uv: [uv_base.x(), uv_base.y() + uv_size.y()],
                             colour,
                             rounding: [0.0, 0.0],
                             tex,
                         });
                         cdc.vertices.push(Vertex2d {
-                            position: vert_pos(pos.0.x + size.0.x, pos.0.y + size.0.y),
+                            position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), 0.0),
                             uv: [uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y()],
                             colour,
                             rounding: [0.0, 0.0],
@@ -282,9 +285,27 @@ impl CareRenderState {
                     }
                 }
                 DrawCommandData::Triangle {
-                    verts: _,
-                    tex_uvs: _,
-                } => todo!(),
+                    verts,
+                    tex_uvs,
+                } => {
+                    let (tex, uvs) = if let Some((tex, uvs)) = tex_uvs {
+                        (use_tex(&tex, &mut cdc), uvs)
+                    } else {
+                        (0, [Vec2::new(0.5, 0.5); 3])
+                    };
+                    let n = cdc.vertices.len() as u32;
+                    for (pos, uv) in verts.iter().zip(uvs.iter()) {
+                        cdc.vertices.push(Vertex2d {
+                            position: vert_pos((pos.x(), pos.y()), 0.0),
+                            uv: [uv.x(), uv.y()],
+                            colour,
+                            rounding: [0.0, 0.0],
+                            tex,
+                        });
+                    }
+                    cdc.indices
+                        .extend_from_slice(&[n, n + 1, n + 2])
+                }
                 DrawCommandData::Circle {
                     center: _,
                     radius: _,

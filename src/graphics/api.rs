@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Instant};
+use std::fmt::Display;
 
 use parking_lot::RwLock;
 use wgpu::{Buffer, Device, Queue};

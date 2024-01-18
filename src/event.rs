@@ -3,19 +3,27 @@ use std::{future::Future, convert::Infallible, pin::Pin, task::{Context, Waker, 
 use crate::keyboard::Key;
 
 #[derive(Debug)]
+/// Data for an event
 pub enum EventData {
+    /// A key pressed/released event
     KeyEvent {
+        /// The key
         key: Key,
+        /// Whether it was pressed (true) or released (false)
         pressed: bool,
     },
 }
 
 #[derive(Debug)]
+/// An event that has occurred, usually from user input
 pub struct Event {
+    /// The time the event was created
     pub timestamp: Instant,
+    /// The data associated with the event
     pub data: EventData,
 }
 
+/// Run the game main loop, using a specific function
 pub fn main_loop(loop_fn: impl FnMut() + 'static) {
     #[cfg(feature = "window")]
     crate::window::run(loop_fn);
@@ -25,6 +33,9 @@ pub fn main_loop(loop_fn: impl FnMut() + 'static) {
     }
 }
 
+/// Run the game main function, as an async function that must yield exactly once per frame
+///
+/// Eventually this will be reimplemented better, maybe with tokio
 pub fn main_async(mut fut: impl Future<Output = Infallible> + Unpin + 'static) {
     // From the rust source code, a "no-op" waker, because there's only ever one future.
     const VTABLE: RawWakerVTable = RawWakerVTable::new(
@@ -43,9 +54,10 @@ pub fn main_async(mut fut: impl Future<Output = Infallible> + Unpin + 'static) {
     })
 }
 
+/// Process an event, this can only send events within the game, not emulate actual mouse motion or
+/// keyboard buttons
 pub fn handle_event(ev: Event) {
     match ev.data {
         EventData::KeyEvent { key, pressed } => crate::keyboard::process_key_event(key, pressed),
     }
 }
-

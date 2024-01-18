@@ -18,12 +18,14 @@ impl Font {
     pub fn new(file: impl AsRef<Path>) -> Self {
         Font::new_from_vec(fs::read(file).unwrap())
     }
+    /// Create a new font from raw data
     pub fn new_from_vec(bytes: Vec<u8>) -> Self {
         Font(Arc::new((
             rusttype::Font::try_from_vec(bytes).unwrap(),
             next_font_id(),
         )))
     }
+    /// Create a new font from raw data
     pub fn new_from_bytes(bytes: &'static [u8]) -> Self {
         Self::new_from_bytes_and_id(bytes, next_font_id())
     }

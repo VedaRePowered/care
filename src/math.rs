@@ -76,7 +76,6 @@ macro_rules! impl_vec_n {
                     self.0.$name
                 }
             )*
-
         }
         impl<$($ty_name: IntoFl,)*> From<($($ty_name,)*)> for $vec {
             #[inline(always)]
@@ -159,6 +158,22 @@ impl Mat4 {
     }
 }
 
+impl std::ops::Mul<Vec3> for &Mat4 {
+    type Output = Vec3;
+
+    fn mul(self, rhs: Vec3) -> Self::Output {
+        Vec3((self.0 * Vector4::new(rhs.0.x, rhs.0.y, rhs.0.z, 1.0)).xyz())
+    }
+}
+
+impl std::ops::Mul<Vec4> for &Mat4 {
+    type Output = Vec4;
+
+    fn mul(self, rhs: Vec4) -> Self::Output {
+        Vec4(self.0 * rhs.0)
+    }
+}
+
 impl Mat3 {
     /// 3x3 identity matrix
     pub fn ident() -> Self {
@@ -166,10 +181,43 @@ impl Mat3 {
     }
 }
 
+impl std::ops::Mul<Vec2> for &Mat3 {
+    type Output = Vec2;
+
+    fn mul(self, rhs: Vec2) -> Self::Output {
+        Vec2((self.0 * Vector3::new(rhs.0.x, rhs.0.y, 1.0)).xy())
+    }
+}
+
+impl std::ops::Mul<Vec3> for &Mat3 {
+    type Output = Vec3;
+
+    fn mul(self, rhs: Vec3) -> Self::Output {
+        Vec3(self.0 * rhs.0)
+    }
+}
+
 impl Mat2 {
     /// 2x2 identity matrix
     pub fn ident() -> Self {
         Mat2(Matrix2::identity())
+    }
+}
+
+impl Vec2 {
+    #[inline]
+    /// Return a version of this vector that has been rotated by `rotation` radians clockwise
+    pub fn rotated(&self, rotation: Fl) -> Vec2 {
+        let (s, c) = (rotation.sin(), rotation.cos());
+        Vec2::new(self.0.x*c - self.0.y*s, self.0.y*c + self.0.x*s)
+    }
+}
+
+impl std::ops::Mul<Vec2> for Mat2 {
+    type Output = Vec2;
+
+    fn mul(self, rhs: Vec2) -> Self::Output {
+        Vec2(self.0 * rhs.0)
     }
 }
 
