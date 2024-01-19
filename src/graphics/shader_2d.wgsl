@@ -33,7 +33,7 @@ struct VertexOutput {
 	@location(0) colour: vec4<f32>,
 	@location(1) uv: vec2<f32>,
 	@location(2) tex: u32,
-	@location(3) @interpolate(flat) rounding: vec2<f32>,
+	@location(3) circle: i32,
 };
 
 @vertex
@@ -43,24 +43,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	out.colour = in.colour;
 	out.uv = in.uv;
 	out.tex = in.tex;
-	var direction = vec2<f32>(0.0, 0.0);
-	if in.uv.x <= 0.1 {
-		direction.x = 1.0;
-	} else if in.uv.x >= 0.9 {
-		direction.x = -1.0;
-	}
-	if in.uv.y <= 0.1 {
-		direction.y = 1.0;
-	} else if in.uv.y >= 0.9 {
-		direction.y = -1.0;
-	}
-	out.rounding = vec2<f32>(direction*in.rounding);
+	out.circle = i32(in.rounding >= 0.5);
 	return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	var rounding_dist = min(min(uv.x), min());
+	if in.circle != 0 && length(in.uv-vec2<f32>(0.5, 0.5)) > 0.5 {
+		discard;
+	}
 	var out: vec4<f32> = in.colour;
 	switch in.tex {
 		case 1u: { out *= textureSample(texture_0, sampler_0, in.uv); }
