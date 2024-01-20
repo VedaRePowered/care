@@ -8,7 +8,7 @@ use winit::window::WindowId;
 
 use crate::math::{Mat3, Vec4};
 
-use super::{Texture, CareRenderState, Font, Vertex2d};
+use super::{Texture, CareRenderState, Font, Vertex2d, LineJoinStyle, LineEndStyle};
 
 #[derive(Debug)]
 pub(crate) struct GraphicsState {
@@ -105,6 +105,8 @@ impl GraphicsState {
             font_cache_texture: OnceLock::new(),
             default_font: Font::new_from_bytes_and_id(include_bytes!("../assets/Urbanist-Regular.ttf"), 1),
             next_font_id: 2,
+            line_join_style: LineJoinStyle::Rounded,
+            line_end_style: LineEndStyle::Rounded,
         };
 
         let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d, bind_group_layouts_2d) = {

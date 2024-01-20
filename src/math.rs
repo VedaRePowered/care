@@ -221,7 +221,7 @@ impl Vec2 {
     }
     /// Return the euclidian length (l1 norm) of this vector
     pub fn length(&self) -> Fl {
-        (self.0.x + self.0.y).sqrt()
+        (self.0.x.powi(2) + self.0.y.powi(2)).sqrt()
     }
     /// Return the euclidian length (l1 norm) of this vector
     pub fn normalize_or(&self, other: Vec2) -> Self {

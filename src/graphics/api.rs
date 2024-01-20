@@ -3,9 +3,12 @@ use std::fmt::Display;
 use parking_lot::RwLock;
 use wgpu::{Buffer, Device, Queue};
 
-use crate::math::{IntoFl, Vec2, Vec4};
+use crate::{
+    graphics::LineJoinStyle,
+    math::{IntoFl, Vec2, Vec4},
+};
 
-use super::{DrawCommand, DrawCommandData, GraphicsState, Texture, GRAPHICS_STATE};
+use super::{DrawCommand, DrawCommandData, GraphicsState, LineEndStyle, Texture, GRAPHICS_STATE};
 
 /// Initialize the graphics library, must be called on the main thread!
 pub fn init() {
@@ -34,6 +37,17 @@ pub fn set_colour(colour: impl Into<Vec4>) {
         .care_render
         .write()
         .current_colour = colour.into();
+}
+
+/// Set the colour used for rendering
+pub fn set_line_style(join_style: LineJoinStyle, end_style: LineEndStyle) {
+    let mut render = GRAPHICS_STATE
+        .get()
+        .unwrap()
+        .care_render
+        .write();
+    render.line_join_style = join_style;
+    render.line_end_style = end_style;
 }
 
 /// Render a line of text to the screen
@@ -257,6 +271,52 @@ pub fn elipse(center: impl Into<Vec2>, radius: impl IntoFl, elipseness: impl Int
             center: center.into(),
             radius: radius.into_fl(),
             elipseness: elipseness.into(),
+        },
+    };
+    render.commands.push(command);
+}
+
+/// Draw a single line segment
+pub fn line_segment(point1: impl Into<Vec2>, point2: impl Into<Vec2>, width: impl IntoFl) {
+    line([point1.into(), point2.into()], width)
+}
+
+/// Draw a line with consistant width and line join style
+pub fn line(points: impl IntoIterator<Item = impl Into<Vec2>>, width: impl IntoFl) {
+    let (line_join_style, line_end_style) = {
+    let render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .read();
+        (render.line_join_style, render.line_end_style)
+    };
+    let width = width.into_fl();
+    line_varying_styles(
+        points.into_iter().map(|pt| (pt, width, line_join_style)),
+        (line_end_style, line_end_style),
+    )
+}
+
+/// Draw a line with varying width or join style
+pub fn line_varying_styles(
+    points: impl IntoIterator<Item = (impl Into<Vec2>, impl IntoFl, LineJoinStyle)>,
+    ends: (LineEndStyle, LineEndStyle),
+) {
+    let mut render = GRAPHICS_STATE
+        .get()
+        .expect("Graphics not initialized")
+        .care_render
+        .write();
+    let command = DrawCommand {
+        transform: render.current_transform.clone(),
+        colour: render.current_colour,
+        data: DrawCommandData::Line {
+            points: points
+                .into_iter()
+                .map(|(p, w, j)| (p.into(), w.into_fl() as f32, j.into()))
+                .collect(),
+            ends,
         },
     };
     render.commands.push(command);

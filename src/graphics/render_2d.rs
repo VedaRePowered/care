@@ -5,23 +5,37 @@ use rusttype::{gpu_cache::Cache as FontCache, PositionedGlyph};
 use wgpu::VertexAttribute;
 use winit::window::WindowId;
 
-use crate::{math::{Fl, Mat3, Vec2, Vec4}, prelude::Mat2};
+use crate::{
+    math::{Fl, Mat3, Vec2, Vec4},
+    prelude::Mat2,
+};
 
-use super::{Texture, Font};
+use super::{Font, Texture};
 
-#[derive(Debug)]
-pub(crate) enum LineJoinStyle {
-    Miter,
-    LimitedMiter,
-    Bevel,
-    Rounded,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How to join lines together
+pub enum LineJoinStyle {
+    /// None/disconnected
     None,
+    /// Merge the two lines points on the left and right
+    Merge,
+    /// Angled so it looks like both sides of the line meet where they logically would
+    /// Limited at extreme angles to avoid weird visual glitches
+    Miter,
+    /// Just bevel to fill in the gap with a flat line
+    Bevel,
+    /// Rounded with a curve
+    Rounded,
 }
 
-#[derive(Debug)]
-pub(crate) enum LineEndStyle {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How to end lines
+pub enum LineEndStyle {
+    /// flattened
     Flat,
+    /// Angled little point
     Point,
+    /// Rounded circular point
     Rounded,
 }
 
@@ -99,6 +113,8 @@ pub(crate) struct CareRenderState {
     pub font_cache_texture: OnceLock<Texture>,
     pub default_font: Font,
     pub next_font_id: u32,
+    pub line_end_style: LineEndStyle,
+    pub line_join_style: LineJoinStyle,
 }
 
 impl Debug for CareRenderState {
@@ -119,6 +135,35 @@ pub(crate) struct DrawCall<T: bytemuck::Pod + Default> {
     pub(crate) vertices: Vec<T>,
     pub(crate) indices: Vec<u32>,
     pub(crate) textures: Vec<Texture>,
+}
+
+fn helper_line_segment_normal(pos1: Vec2, pos2: Vec2, width: f32) -> Vec2 {
+    (pos2 - pos1).normalize_or(Vec2::new(0.0, 0.0)).tangent() * width / 2.0
+}
+
+fn helper_add_verts_for_line_segment(
+    verts: &mut Vec<Vertex2d>,
+    vert_pos: &dyn Fn((Fl, Fl), Fl) -> [f32; 2],
+    colour: [u8; 4],
+    pos1: Vec2,
+    pos2: Vec2,
+    width: f32,
+) {
+    let norm = helper_line_segment_normal(pos1, pos2, width);
+    verts.push(Vertex2d {
+        position: vert_pos((pos1.x() + norm.x(), pos1.y() + norm.y()), 0.0),
+        uv: [0.0, 0.0],
+        colour,
+        rounding: 0.0,
+        tex: 0,
+    });
+    verts.push(Vertex2d {
+        position: vert_pos((pos1.x() - norm.x(), pos1.y() - norm.y()), 0.0),
+        uv: [0.0, 0.0],
+        colour,
+        rounding: 0.0,
+        tex: 0,
+    });
 }
 
 impl CareRenderState {
@@ -151,7 +196,10 @@ impl CareRenderState {
         for command in self.commands.drain(..) {
             let vert_pos = |v: (Fl, Fl), rot: Fl| {
                 let v = (&command.transform) * Vec2::from(v).rotated(rot);
-                [(v.x() / screen_size.0.x) as f32, (v.y() / screen_size.0.y) as f32]
+                [
+                    (v.x() / screen_size.0.x) as f32,
+                    (v.y() / screen_size.0.y) as f32,
+                ]
             };
             let colour = [
                 (command.colour.0.x * 255.99) as u8,
@@ -167,10 +215,10 @@ impl CareRenderState {
                     corner_radii,
                 } => {
                     let n = cdc.vertices.len() as u32;
-                    let (uv, uv_per_pix) = if size.x() > size.y() {
-                        (Vec2::new(1, size.y()/size.x()), 2.0/size.x())
+                    let (uv, _uv_per_pix) = if size.x() > size.y() {
+                        (Vec2::new(1, size.y() / size.x()), 2.0 / size.x())
                     } else {
-                        (Vec2::new(1, size.x()/size.y()), 2.0/size.y())
+                        (Vec2::new(1, size.x() / size.y()), 2.0 / size.y())
                     };
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.x(), pos.y()), rotation),
@@ -289,10 +337,7 @@ impl CareRenderState {
                             .extend_from_slice(&[n, n + 1, n + 2, n + 2, n + 1, n + 3])
                     }
                 }
-                DrawCommandData::Triangle {
-                    verts,
-                    tex_uvs,
-                } => {
+                DrawCommandData::Triangle { verts, tex_uvs } => {
                     let (tex, uvs) = if let Some((tex, uvs)) = tex_uvs {
                         (use_tex(&tex, &mut cdc), uvs)
                     } else {
@@ -308,8 +353,7 @@ impl CareRenderState {
                             tex,
                         });
                     }
-                    cdc.indices
-                        .extend_from_slice(&[n, n + 1, n + 2])
+                    cdc.indices.extend_from_slice(&[n, n + 1, n + 2])
                 }
                 DrawCommandData::Circle {
                     center,
@@ -318,21 +362,19 @@ impl CareRenderState {
                 } => {
                     let n = cdc.vertices.len() as u32;
                     let sqrt_3 = (3.0f32).sqrt();
-                    let left = Vec2::new(-sqrt_3*radius, -radius);
-                    let right = Vec2::new(sqrt_3*radius, -radius);
-                    let top = Vec2::new(0.0, 2.0*radius);
+                    let left = Vec2::new(-sqrt_3 * radius, -radius);
+                    let right = Vec2::new(sqrt_3 * radius, -radius);
+                    let top = Vec2::new(0.0, 2.0 * radius);
                     let e_dir = elipseness.normalize_or(Vec2::new(1, 0));
                     let e_tan = e_dir.tangent();
-                    let e_len = elipseness.length()+1.0;
-                    let e_mat = Mat2::new(
-                        e_dir.x()*e_len, -e_tan.x(),
-                        e_dir.y()*e_len, -e_tan.y(),
-                    );
-                    let left = center + &e_mat*left;
-                    let right = center + &e_mat*right;
-                    let top = center + &e_mat*top;
-                    let left_uv = Vec2::new((1.0-sqrt_3)/2.0, 0.0);
-                    let right_uv = Vec2::new(1.0+(sqrt_3-1.0)/2.0, 0.0);
+                    let e_len = elipseness.length() + 1.0;
+                    let e_mat =
+                        Mat2::new(e_dir.x() * e_len, -e_tan.x(), e_dir.y() * e_len, -e_tan.y());
+                    let left = center + &e_mat * left;
+                    let right = center + &e_mat * right;
+                    let top = center + &e_mat * top;
+                    let left_uv = Vec2::new((1.0 - sqrt_3) / 2.0, 0.0);
+                    let right_uv = Vec2::new(1.0 + (sqrt_3 - 1.0) / 2.0, 0.0);
                     let top_uv = Vec2::new(0.5, 1.5);
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((left.x(), left.y()), 0.0),
@@ -355,14 +397,57 @@ impl CareRenderState {
                         rounding: 0.5,
                         tex: 0,
                     });
-                    cdc.indices
-                        .extend_from_slice(&[n, n + 1, n + 2])
+                    cdc.indices.extend_from_slice(&[n, n + 1, n + 2])
                 }
-                DrawCommandData::Line { points: _, ends: _ } => todo!(),
+                DrawCommandData::Line { points, ends } => {
+                    // TODO: Line Ends
+                    let mut n = (cdc.vertices.len() as u32, cdc.vertices.len() as u32 + 1);
+                    helper_add_verts_for_line_segment(
+                        &mut cdc.vertices,
+                        &vert_pos,
+                        colour,
+                        points[0].0,
+                        points[1].0,
+                        points[0].1,
+                    );
+                    for segs in points.windows(3) {
+                        let m = cdc.vertices.len() as u32;
+                        helper_add_verts_for_line_segment(
+                            &mut cdc.vertices,
+                            &vert_pos,
+                            colour,
+                            segs[1].0,
+                            segs[0].0,
+                            -segs[1].1,
+                        );
+                        cdc.indices
+                            .extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
+                        n = (cdc.vertices.len() as u32, cdc.vertices.len() as u32 + 1);
+                        helper_add_verts_for_line_segment(
+                            &mut cdc.vertices,
+                            &vert_pos,
+                            colour,
+                            segs[1].0,
+                            segs[2].0,
+                            segs[1].1,
+                        );
+                    }
+                    let m = cdc.vertices.len() as u32;
+                    helper_add_verts_for_line_segment(
+                        &mut cdc.vertices,
+                        &vert_pos,
+                        colour,
+                        points[points.len()-1].0,
+                        points[points.len()-2].0,
+                        -points[points.len()-1].1,
+                    );
+                    cdc.indices
+                        .extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
+                }
             }
         }
+        //println!("{cdc:?}");
         draw_calls.push(cdc);
         draw_calls
     }
 }
-
