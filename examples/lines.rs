@@ -19,7 +19,7 @@ fn draw() {
         care::graphics::line([(x+25, 565), (x+75, 565), (x+25, 540)], 10);
     }
     for x in 1..=5 {
-        care::graphics::line_segment((0, x*100), (800, x*100), 2);
+        care::graphics::line_segment((0, x*100), (500, x*100), 2);
         care::graphics::line_segment((x*100, 0), (x*100, 600), 2);
     }
 }

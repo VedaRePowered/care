@@ -254,11 +254,11 @@ pub fn triangle_textured(
 
 /// Render a circle
 pub fn circle(center: impl Into<Vec2>, radius: impl IntoFl) {
-    elipse(center, radius, (0, 0))
+    ellipse(center, radius, (0, 0))
 }
 
 /// Render a circle
-pub fn elipse(center: impl Into<Vec2>, radius: impl IntoFl, elipseness: impl Into<Vec2>) {
+pub fn ellipse(center: impl Into<Vec2>, radius: impl IntoFl, elipseness: impl Into<Vec2>) {
     let mut render = GRAPHICS_STATE
         .get()
         .expect("Graphics not initialized")
