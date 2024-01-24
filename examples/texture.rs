@@ -9,7 +9,7 @@ fn init(_args: Vec<String>) {
 
 #[care::draw]
 fn draw() {
-    care::graphics::texture(tex, (50, 50));
+    care::graphics::texture(&tex, (50, 50));
 }
 
 care::main!();

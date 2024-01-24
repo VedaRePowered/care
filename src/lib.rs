@@ -17,6 +17,8 @@ pub mod window;
 pub mod keyboard;
 /// Useful structs to have imported
 pub mod prelude;
+/// Stuff for working with a mouse
+pub mod mouse;
 
 /// Make some state for the game
 pub use care_macro::care_state as state;
@@ -42,6 +44,8 @@ pub use nalgebra;
 #[cfg(feature = "graphics")]
 /// The rust type crate is used internally for loading rendering ttf fonts
 pub use rusttype;
+/// The rand crate is used to generate random numbers
+pub use rand;
 
 /// Inserts a default main function that automatically initializes the framework, opens a window,
 /// and calls the functions marked by [init], [update] and [draw] at appropriate

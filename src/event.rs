@@ -1,6 +1,6 @@
 use std::{future::Future, convert::Infallible, pin::Pin, task::{Context, Waker, RawWaker, RawWakerVTable}, time::Instant};
 
-use crate::keyboard::Key;
+use crate::{keyboard::Key, math::Vec2};
 
 #[derive(Debug)]
 /// Data for an event
@@ -10,6 +10,18 @@ pub enum EventData {
         /// The key
         key: Key,
         /// Whether it was pressed (true) or released (false)
+        pressed: bool,
+    },
+    /// A mouse moved event
+    MouseMoved {
+        /// The absolute screen position for the event
+        position: Vec2,
+    },
+    /// A mouse click event
+    MouseClick {
+        /// The mouse button
+        button: i32,
+        /// Whether it's currently pressed
         pressed: bool,
     },
 }
@@ -59,5 +71,7 @@ pub fn main_async(mut fut: impl Future<Output = Infallible> + Unpin + 'static) {
 pub fn handle_event(ev: Event) {
     match ev.data {
         EventData::KeyEvent { key, pressed } => crate::keyboard::process_key_event(key, pressed),
+        EventData::MouseMoved { position } => crate::mouse::process_mouse_moved_event(position),
+        EventData::MouseClick { button, pressed } => crate::mouse::process_mouse_click_event(button, pressed),
     }
 }

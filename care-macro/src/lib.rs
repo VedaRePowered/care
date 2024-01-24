@@ -4,6 +4,8 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{spanned::Spanned, Block, Expr, ItemFn, ItemStatic, Stmt};
 
+const STATE_VAR_SEPARATOR: &str = ",,,\n\n\n,,,";
+
 #[rustfmt::skip]
 fn dereference_state_vars(expr: &mut Expr, vars: &HashSet<String>) {
     match expr {
@@ -129,7 +131,7 @@ fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::T
     std::env::set_var(&var_name, func_name.to_string());
 
     let state_vars: HashSet<_> = state_params
-        .split(",")
+        .split(STATE_VAR_SEPARATOR)
         .filter(|s| !s.is_empty())
         .map(|p| {
             p.split_once(':').unwrap().0.trim().to_string()
@@ -137,11 +139,11 @@ fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::T
         .collect();
 
     let state_params = if input.sig.inputs.is_empty() {
-        state_params.trim_start_matches(',')
+        state_params.trim_start_matches(STATE_VAR_SEPARATOR)
     } else {
         &state_params
     };
-    let new_params: TokenStream = state_params.parse().unwrap();
+    let new_params: TokenStream = state_params.replace(STATE_VAR_SEPARATOR, ",").parse().unwrap();
     let asyncness = input.sig.asyncness;
     let ident = input.sig.ident;
     let generics = input.sig.generics;
@@ -185,7 +187,7 @@ pub fn care_state(
         std::env::var("_CARE_INTERNAL_STATE_PARAMS")
             .ok()
             .unwrap_or_else(String::new)
-            + ","
+            + STATE_VAR_SEPARATOR
             + &quote! { #ident: &mut #ty }.to_string(),
     );
     std::env::set_var(
@@ -193,7 +195,7 @@ pub fn care_state(
         std::env::var("_CARE_INTERNAL_STATE_ITEMS")
             .ok()
             .unwrap_or_else(String::new)
-            + ","
+            + STATE_VAR_SEPARATOR
             + &quote! { &mut #ident_state }.to_string(),
     );
     proc_macro::TokenStream::new()
@@ -244,11 +246,11 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let additional_params: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
         .ok()
-        .map(|st| st.parse().unwrap())
+        .map(|st| st.replace(STATE_VAR_SEPARATOR, ",").parse().unwrap())
         .unwrap_or_else(TokenStream::new);
     let additional_params_trim: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
         .ok()
-        .map(|st| st.trim_start_matches(',').parse().unwrap())
+        .map(|st| st.trim_start_matches(STATE_VAR_SEPARATOR).replace(STATE_VAR_SEPARATOR, ",").parse().unwrap())
         .unwrap_or_else(TokenStream::new);
 
     let init_call = maybe_call_function(init_fn, quote! {app_args #additional_params});
@@ -258,11 +260,11 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let result = quote! {
         fn main() {
             let config = { #conf };
-            #[cfg(feature = "window")]
+            //#[cfg(feature = "window")] // Not how to do this
             ::care::window::init();
-            #[cfg(feature = "window")]
+            //#[cfg(feature = "window")]
             ::care::window::open(&env!("CARGO_CRATE_NAME"));
-            #[cfg(feature = "graphics")]
+            //#[cfg(feature = "graphics")]
             ::care::graphics::init();
             #state_lets
             let app_args: Vec<_> = ::std::env::args().collect();
@@ -273,12 +275,14 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 let delta_time = next_time.duration_since(last_time).as_secs_f64() as ::care::math::Fl;
                 last_time = next_time;
                 #update_call
-                #[cfg(feature = "graphics")]
+                //#[cfg(feature = "graphics")]
                 {
                     #draw_call
                     ::care::graphics::present();
                 }
                 let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
+                ::care::keyboard::reset();
+                ::care::mouse::reset();
             });
         }
     };

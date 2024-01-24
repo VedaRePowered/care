@@ -1,11 +1,15 @@
-use std::{sync::atomic::{AtomicBool, Ordering}, time::Instant};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Instant,
+};
 
 use parking_lot::RwLock;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
+    event::{Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder}, event::{WindowEvent, Event, KeyEvent},
     keyboard::{Key as WKey, NamedKey, SmolStr},
+    window::{Window, WindowBuilder},
 };
 
 use crate::{math::Vec2, prelude::Key};
@@ -129,24 +133,71 @@ pub(crate) fn run(mut loop_fn: impl FnMut()) {
             .write()
             .take()
             .expect("Event loop must be run from the main thread");
-        el.run(move |ev, event_loop| {
-            match ev {
-                Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                    event_loop.exit();
-                }
-                Event::WindowEvent { event: WindowEvent::KeyboardInput { event: KeyEvent { logical_key, state, repeat, .. }, .. }, .. } => {
-                    if !repeat {
-                        crate::event::handle_event(crate::event::Event {
-                            timestamp: Instant::now(),
-                            data: crate::event::EventData::KeyEvent { key: convert_key(logical_key), pressed: state.is_pressed() },
-                        });
-                    }
-                }
-                Event::AboutToWait => {
-                    loop_fn();
-                }
-                _ => {}
+        el.run(move |ev, event_loop| match ev {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                event_loop.exit();
             }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key,
+                                state,
+                                repeat,
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                if !repeat {
+                    crate::event::handle_event(crate::event::Event {
+                        timestamp: Instant::now(),
+                        data: crate::event::EventData::KeyEvent {
+                            key: convert_key(logical_key),
+                            pressed: state.is_pressed(),
+                        },
+                    });
+                }
+            }
+            Event::WindowEvent {
+                event: WindowEvent::CursorMoved { position, .. },
+                ..
+            } => {
+                crate::event::handle_event(crate::event::Event {
+                    timestamp: Instant::now(),
+                    data: crate::event::EventData::MouseMoved {
+                        position: Vec2::new(position.x, position.y),
+                    },
+                });
+            }
+            Event::WindowEvent {
+                event: WindowEvent::MouseInput { state, button, .. },
+                ..
+            } => {
+                crate::event::handle_event(crate::event::Event {
+                    timestamp: Instant::now(),
+                    data: crate::event::EventData::MouseClick {
+                        button: match button {
+                            winit::event::MouseButton::Left => 1,
+                            winit::event::MouseButton::Right => 2,
+                            winit::event::MouseButton::Middle => 3,
+                            winit::event::MouseButton::Back => 4,
+                            winit::event::MouseButton::Forward => 5,
+                            winit::event::MouseButton::Other(n) => n as i32 + 6,
+                        },
+                        pressed: state.is_pressed(),
+                    },
+                });
+            }
+            Event::AboutToWait => {
+                loop_fn();
+            }
+            _ => {}
         })
         .unwrap();
     });
