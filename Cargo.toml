@@ -1,4 +1,3 @@
-workspace = { members = ["care-macro"] }
 [package]
 name = "care"
 version = "0.1.0"
@@ -28,4 +27,10 @@ f64 = []
 
 graphics = ["dep:wgpu", "dep:image", "dep:rusttype", "dep:pollster"]
 window = ["dep:winit", "graphics"]
+
+[workspace]
+members = [
+	"care-macro",
+	"care-multiplayer"
+]
 
