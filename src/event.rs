@@ -62,7 +62,7 @@ pub fn main_async(mut fut: impl Future<Output = Infallible> + Unpin + 'static) {
         );
     const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
     main_loop(move || {
-        let _ = Pin::new(&mut fut).poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
+        let val = Pin::new(&mut fut).poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
     })
 }
 

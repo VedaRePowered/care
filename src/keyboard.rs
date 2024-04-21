@@ -102,18 +102,18 @@ fn get_state() -> &'static RwLock<KeyboardState> {
 }
 
 /// Get whether a key is currently being held down
-pub fn is_down(key: Key) -> bool {
-    get_state().read().held.contains(&key)
+pub fn is_down(key: impl Into<Key>) -> bool {
+    get_state().read().held.contains(&key.into())
 }
 
 /// Get whether a key was just pressed
-pub fn is_pressed(key: Key) -> bool {
-    get_state().read().pressed.contains(&key)
+pub fn is_pressed(key: impl Into<Key>) -> bool {
+    get_state().read().pressed.contains(&key.into())
 }
 
 /// Get whether a key was just released
-pub fn is_released(key: Key) -> bool {
-    get_state().read().released.contains(&key)
+pub fn is_released(key: impl Into<Key>) -> bool {
+    get_state().read().released.contains(&key.into())
 }
 
 /// Process a key event, used internally to handle key events
