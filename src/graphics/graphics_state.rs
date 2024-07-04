@@ -1,20 +1,22 @@
-use std::{fmt::Debug, sync::OnceLock, collections::HashMap};
+use std::{collections::HashMap, fmt::Debug, sync::OnceLock};
 
 use parking_lot::RwLock;
 use pollster::FutureExt;
 use rusttype::gpu_cache::Cache as FontCache;
-use wgpu::{Device, Queue, Surface, RenderPipeline, Buffer};
+use wgpu::{Adapter, Buffer, Device, Instance, Queue, RenderPipeline, Surface};
 use winit::window::WindowId;
 
 use crate::math::{Mat3, Vec4};
 
-use super::{Texture, CareRenderState, Font, Vertex2d, LineJoinStyle, LineEndStyle};
+use super::{CareRenderState, Font, LineEndStyle, LineJoinStyle, Texture, Vertex2d};
 
 #[derive(Debug)]
 pub(crate) struct GraphicsState {
+    pub instance: Instance,
+    pub adapter: Adapter,
     pub device: Device,
     pub queue: Queue,
-    pub window_surfaces: HashMap<WindowId, (Surface, (u32, u32))>,
+    pub window_surfaces: HashMap<WindowId, RwLock<(Surface, (u32, u32))>>,
     pub render_pipeline_2d: RenderPipeline,
     pub vertex_buffer_2d: RwLock<Buffer>,
     pub index_buffer_2d: RwLock<Buffer>,
@@ -37,25 +39,28 @@ impl GraphicsState {
             .map(|win| {
                 (
                     win.id(),
-                    (
+                    RwLock::new((
                         unsafe { instance.create_surface(win) }
                             .expect("Failed to create surface for window."),
                         (win.inner_size().width, win.inner_size().height),
-                    ),
+                    )),
                 )
             })
             .collect();
         #[cfg(not(feature = "window"))]
         let window_surfaces = HashMap::new();
 
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-                compatible_surface: window_surfaces.values().next().map(|(surf, _dims)| surf),
-            })
-            .block_on()
-            .expect("No graphics adapter found");
+        let adapter = {
+            let surface = window_surfaces.values().next().map(|surf| surf.read());
+            instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    force_fallback_adapter: false,
+                    compatible_surface: surface.as_ref().map(|s| &s.0),
+                })
+                .block_on()
+                .expect("No graphics adapter found")
+        };
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -68,8 +73,9 @@ impl GraphicsState {
             .block_on()
             .expect("No graphics device found in adapter");
 
-        for (_, (surface, dims)) in &window_surfaces {
-            let surface_caps = surface.get_capabilities(&adapter);
+        for (_, surf) in &window_surfaces {
+            let surf = surf.read();
+            let surface_caps = surf.0.get_capabilities(&adapter);
             let surface_format = surface_caps
                 .formats
                 .iter()
@@ -80,13 +86,13 @@ impl GraphicsState {
             let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: surface_format,
-                width: dims.0,
-                height: dims.1,
+                width: surf.1 .0,
+                height: surf.1 .1,
                 present_mode: surface_caps.present_modes[0],
                 alpha_mode: surface_caps.alpha_modes[0],
                 view_formats: vec![],
             };
-            surface.configure(&device, &config);
+            surf.0.configure(&device, &config);
         }
 
         let limits = device.limits();
@@ -103,7 +109,10 @@ impl GraphicsState {
                 .min(limits.max_samplers_per_shader_stage) as usize,
             font_cache: FontCache::builder().dimensions(1024, 1024).build(),
             font_cache_texture: OnceLock::new(),
-            default_font: Font::new_from_bytes_and_id(include_bytes!("../assets/Urbanist-Regular.ttf"), 1),
+            default_font: Font::new_from_bytes_and_id(
+                include_bytes!("../assets/Urbanist-Regular.ttf"),
+                1,
+            ),
             next_font_id: 2,
             line_join_style: LineJoinStyle::Rounded,
             line_end_style: LineEndStyle::Rounded,
@@ -206,6 +215,8 @@ impl GraphicsState {
         };
 
         Self {
+            instance,
+            adapter,
             device,
             queue,
             window_surfaces,
@@ -220,4 +231,3 @@ impl GraphicsState {
 }
 
 pub(crate) static GRAPHICS_STATE: OnceLock<GraphicsState> = OnceLock::new();
-

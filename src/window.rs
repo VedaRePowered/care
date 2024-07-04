@@ -106,6 +106,17 @@ pub fn open_with_settings(settings: WindowSettings) {
     });
 }
 
+/// WIP Function to set the main window size
+pub fn set_window_size(size: impl Into<Vec2>) {
+    let size = size.into();
+    let mut windows = WINDOWS
+        .write();
+    let window = windows
+        .first_mut()
+        .unwrap();
+    let _ = window.request_inner_size(PhysicalSize::new(size.x(), size.y()));
+}
+
 fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
     match key {
         WKey::Named(NamedKey::ArrowUp) => Key::Up,

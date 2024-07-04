@@ -20,8 +20,13 @@ pub enum LineJoinStyle {
     /// Merge the two lines points on the left and right
     Merge,
     /// Angled so it looks like both sides of the line meet where they logically would
+    ///
     /// Limited at extreme angles to avoid weird visual glitches
     Miter,
+    /// Like miter, angled so it looks like both sides of the line meet where they logically would
+    ///
+    /// Not limited at extreme angles
+    MiterUnlimited,
     /// Just bevel to fill in the gap with a flat line
     Bevel,
     /// Rounded with a curve
@@ -126,6 +131,9 @@ impl Debug for CareRenderState {
             .field("current_surface", &self.current_surface)
             .field("commands", &self.commands)
             .field("max_textures", &self.max_textures)
+            .field("default_font", &self.default_font)
+            .field("line_end_style", &self.line_end_style)
+            .field("line_join_style", &self.line_join_style)
             .finish_non_exhaustive()
     }
 }
@@ -166,6 +174,142 @@ fn helper_add_verts_for_line_segment(
     });
 }
 
+fn helper_add_verts_for_merge_segment(
+    verts: &mut Vec<Vertex2d>,
+    vert_pos: &dyn Fn((Fl, Fl), Fl) -> [f32; 2],
+    colour: [u8; 4],
+    pos1: Vec2,
+    pos2: Vec2,
+    pos3: Vec2,
+    width: f32,
+) {
+    let norm1 = helper_line_segment_normal(pos1, pos2, width);
+    let norm2 = helper_line_segment_normal(pos2, pos3, width);
+    let norm = (norm1+norm2)/2.0;
+    verts.push(Vertex2d {
+        position: vert_pos((pos2.x() + norm.x(), pos2.y() + norm.y()), 0.0),
+        uv: [0.0, 0.0],
+        colour,
+        rounding: 0.0,
+        tex: 0,
+    });
+    verts.push(Vertex2d {
+        position: vert_pos((pos2.x() - norm.x(), pos2.y() - norm.y()), 0.0),
+        uv: [0.0, 0.0],
+        colour,
+        rounding: 0.0,
+        tex: 0,
+    });
+}
+
+fn line_line_intersect(
+    l1: (Vec2, Vec2),
+    l2: (Vec2, Vec2),
+) -> Option<Vec2> {
+    let d = (l1.0.x() - l1.1.x())*(l2.0.y() - l2.1.y()) - (l2.0.x() - l2.1.x())*(l1.0.y() - l1.1.y());
+    if d.abs() <= 0.001 {
+        return None;
+    }
+    Some(Vec2::new(
+        (l1.0.x()*l1.1.y() - l1.0.y()*l1.1.x())*(l2.0.x() - l2.1.x()) -
+            (l1.0.x() - l1.1.x())*(l2.0.x()*l2.1.y() - l2.0.y()*l2.1.x()),
+        (l1.0.x()*l1.1.y() - l1.0.y()*l1.1.x())*(l2.0.y() - l2.1.y()) -
+            (l1.0.y() - l1.1.y())*(l2.0.x()*l2.1.y() - l2.0.y()*l2.1.x()),
+    )/d)
+}
+
+fn limit_dist(source: Vec2, dest: Vec2, max_dist: Fl) -> Vec2 {
+    if (dest-source).length() <= max_dist {
+        dest
+    } else {
+        source + (dest-source).normalize_or(Vec2::new(0, 0)) * max_dist
+    }
+}
+
+fn helper_do_line_join(
+    vertices: &mut Vec<Vertex2d>,
+    vert_pos: &dyn Fn((Fl, Fl), Fl) -> [f32; 2],
+    point1: Vec2,
+    point2: Vec2,
+    point3: Vec2,
+    width: Fl,
+    style: LineJoinStyle,
+    colour: [u8; 4],
+    line1_idx: (u32, u32),
+    line2_idx: (u32, u32),
+) -> Vec<u32> {
+    let norm1 = helper_line_segment_normal(point2, point1, width);
+    let line1_points = (
+        Vec2::new(point2.x() - norm1.x(), point2.y() - norm1.y()),
+        Vec2::new(point2.x() + norm1.x(), point2.y() + norm1.y()),
+    );
+    let norm2 = helper_line_segment_normal(point2, point3, width);
+    let line2_points = (
+        Vec2::new(point2.x() + norm2.x(), point2.y() + norm2.y()),
+        Vec2::new(point2.x() - norm2.x(), point2.y() - norm2.y()),
+    );
+    match style {
+        LineJoinStyle::None => vec![],
+        LineJoinStyle::Merge => vec![],          // TODO
+        LineJoinStyle::Miter | LineJoinStyle::MiterUnlimited => {
+            let point_a = line_line_intersect(
+                (line1_points.0, line1_points.0-norm1.tangent()),
+                (line2_points.0, line2_points.0-norm2.tangent()),
+            ).unwrap_or(point2);
+            let point_b = line_line_intersect(
+                (line1_points.1, line1_points.1-norm1.tangent()),
+                (line2_points.1, line2_points.1-norm2.tangent()),
+            ).unwrap_or(point2);
+            let (point_a, point_b) = if style == LineJoinStyle::Miter {
+                (
+                    limit_dist(point2, point_a, width*2.0),
+                    limit_dist(point2, point_b, width*2.0),
+                )
+            } else {
+                (point_a, point_b)
+            };
+            let n = vertices.len() as u32;
+            vertices.push(Vertex2d {
+                position: vert_pos((point2.x(), point2.y()), 0.0),
+                uv: [0.0, 0.0],
+                colour,
+                rounding: 0.0,
+                tex: 0,
+            });
+            vertices.push(Vertex2d {
+                position: vert_pos((point_a.x(), point_a.y()), 0.0),
+                uv: [0.0, 0.0],
+                colour,
+                rounding: 0.0,
+                tex: 0,
+            });
+            vertices.push(Vertex2d {
+                position: vert_pos((point_b.x(), point_b.y()), 0.0),
+                uv: [0.0, 0.0],
+                colour,
+                rounding: 0.0,
+                tex: 0,
+            });
+            vec![
+                n, line1_idx.0, line2_idx.0, n+1, line2_idx.0, line1_idx.0,
+                n, line1_idx.1, line2_idx.1, n+2, line2_idx.1, line1_idx.1,
+            ]
+        },
+        LineJoinStyle::Bevel => {
+            let n = vertices.len() as u32;
+            vertices.push(Vertex2d {
+                position: vert_pos((point2.x(), point2.y()), 0.0),
+                uv: [0.0, 0.0],
+                colour,
+                rounding: 0.0,
+                tex: 0,
+            });
+            vec![n, line1_idx.0, line2_idx.0, n, line2_idx.1, line1_idx.1]
+        }
+        LineJoinStyle::Rounded => vec![], // TODO
+    }
+}
+
 impl CareRenderState {
     pub fn reset(&mut self) {
         self.transform_stack.clear();
@@ -173,8 +317,7 @@ impl CareRenderState {
         self.current_colour = Vec4::new(1, 1, 1, 1);
         self.commands.clear();
     }
-    pub fn render(&mut self) -> Vec<DrawCall<Vertex2d>> {
-        let screen_size = Vec2::new(800, 600);
+    pub fn render(&mut self, screen_size: Vec2) -> Vec<DrawCall<Vertex2d>> {
         let mut draw_calls = Vec::new();
         let mut cdc = DrawCall::default();
         let mut use_tex = |texture: &Texture, cdc: &mut DrawCall<Vertex2d>| {
@@ -412,37 +555,61 @@ impl CareRenderState {
                     );
                     for segs in points.windows(3) {
                         let m = cdc.vertices.len() as u32;
-                        helper_add_verts_for_line_segment(
-                            &mut cdc.vertices,
-                            &vert_pos,
-                            colour,
-                            segs[1].0,
-                            segs[0].0,
-                            -segs[1].1,
-                        );
-                        cdc.indices
-                            .extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
-                        n = (cdc.vertices.len() as u32, cdc.vertices.len() as u32 + 1);
-                        helper_add_verts_for_line_segment(
-                            &mut cdc.vertices,
-                            &vert_pos,
-                            colour,
-                            segs[1].0,
-                            segs[2].0,
-                            segs[1].1,
-                        );
+                        if segs[0].2 == LineJoinStyle::Merge {
+                            helper_add_verts_for_merge_segment(
+                                &mut cdc.vertices,
+                                &vert_pos,
+                                colour,
+                                segs[0].0,
+                                segs[1].0,
+                                segs[2].0,
+                                segs[1].1,
+                            );
+                            cdc.indices.extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
+                            n = (m, m+1);
+                        } else {
+                            helper_add_verts_for_line_segment(
+                                &mut cdc.vertices,
+                                &vert_pos,
+                                colour,
+                                segs[1].0,
+                                segs[0].0,
+                                -segs[1].1,
+                            );
+                            cdc.indices.extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
+                            n = (cdc.vertices.len() as u32, cdc.vertices.len() as u32 + 1);
+                            helper_add_verts_for_line_segment(
+                                &mut cdc.vertices,
+                                &vert_pos,
+                                colour,
+                                segs[1].0,
+                                segs[2].0,
+                                segs[1].1,
+                            );
+                            cdc.indices.append(&mut helper_do_line_join(
+                                    &mut cdc.vertices,
+                                    &vert_pos,
+                                    segs[0].0,
+                                    segs[1].0,
+                                    segs[2].0,
+                                    segs[1].1,
+                                    segs[1].2,
+                                    colour,
+                                    (m, m + 1),
+                                    n,
+                            ))
+                        }
                     }
                     let m = cdc.vertices.len() as u32;
                     helper_add_verts_for_line_segment(
                         &mut cdc.vertices,
                         &vert_pos,
                         colour,
-                        points[points.len()-1].0,
-                        points[points.len()-2].0,
-                        -points[points.len()-1].1,
+                        points[points.len() - 1].0,
+                        points[points.len() - 2].0,
+                        -points[points.len() - 1].1,
                     );
-                    cdc.indices
-                        .extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
+                    cdc.indices.extend_from_slice(&[n.0, n.1, m, m, n.1, m + 1]);
                 }
             }
         }

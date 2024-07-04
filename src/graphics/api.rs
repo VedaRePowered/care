@@ -41,11 +41,7 @@ pub fn set_colour(colour: impl Into<Vec4>) {
 
 /// Set the colour used for rendering
 pub fn set_line_style(join_style: LineJoinStyle, end_style: LineEndStyle) {
-    let mut render = GRAPHICS_STATE
-        .get()
-        .unwrap()
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.get().unwrap().care_render.write();
     render.line_join_style = join_style;
     render.line_end_style = end_style;
 }
@@ -284,11 +280,11 @@ pub fn line_segment(point1: impl Into<Vec2>, point2: impl Into<Vec2>, width: imp
 /// Draw a line with consistant width and line join style
 pub fn line(points: impl IntoIterator<Item = impl Into<Vec2>>, width: impl IntoFl) {
     let (line_join_style, line_end_style) = {
-    let render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
-        .care_render
-        .read();
+        let render = GRAPHICS_STATE
+            .get()
+            .expect("Graphics not initialized")
+            .care_render
+            .read();
         (render.line_join_style, render.line_end_style)
     };
     let width = width.into_fl();
@@ -380,14 +376,50 @@ pub fn present() {
             .unwrap();
     }
 
-    let output = state
-        .window_surfaces
-        .values()
-        .next()
-        .unwrap()
+    let output_key = state.window_surfaces.keys().next().unwrap();
+    let output = state.window_surfaces[output_key]
+        .read()
         .0
-        .get_current_texture()
-        .unwrap();
+        .get_current_texture();
+    let output = if let Ok(output) = output {
+        output
+    } else {
+        // Output is outdated, request a new surface...
+        let windows = crate::window::WINDOWS.read();
+        let win = windows.iter().find(|w| w.id() == *output_key).unwrap();
+        let mut output = state.window_surfaces[output_key].write();
+        *output = (
+            unsafe { state.instance.create_surface(win) }
+                .expect("Failed to create surface for window."),
+            (win.inner_size().width, win.inner_size().height),
+        );
+
+        // Configure the new surface
+        let surface_caps = output.0.get_capabilities(&state.adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .filter(|f| f.is_srgb())
+            .next()
+            .unwrap_or(surface_caps.formats[0]);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: output.1 .0,
+            height: output.1 .1,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+        };
+        output.0.configure(&state.device, &config);
+
+        output.0.get_current_texture().unwrap()
+    };
+
+    let screen_size = output.texture.size();
+    let screen_size = Vec2::new(screen_size.width, screen_size.height);
+
     let view = output
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -397,7 +429,7 @@ pub fn present() {
             label: Some("Present command encoder"),
         });
     let max_textures = state.care_render.read().max_textures;
-    let draw_calls = state.care_render.write().render();
+    let draw_calls = state.care_render.write().render(screen_size);
     let placeholder_tex = state.placeholder_texture.get().unwrap();
     for draw_call in draw_calls {
         let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
