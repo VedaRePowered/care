@@ -28,6 +28,8 @@ pub use care_macro::care_init as init;
 pub use care_macro::care_update as update;
 /// Mark a function as the care draw function.
 pub use care_macro::care_draw as draw;
+/// Mark a function as the care draw function.
+pub use care_macro::care_async_main as async_main;
 
 #[doc(hidden)]
 pub use care_macro::care_main as __internal_main;

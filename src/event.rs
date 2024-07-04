@@ -1,6 +1,13 @@
-use std::{future::Future, convert::Infallible, pin::Pin, task::{Context, Waker, RawWaker, RawWakerVTable}, time::Instant};
+use std::{future::Future, time::Instant};
 
-use crate::{keyboard::Key, math::Vec2};
+use crate::{graphics, keyboard::{self, Key}, math::Vec2, mouse, window};
+
+#[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
+mod polling;
+#[cfg(feature = "async-custom")]
+mod custom_async;
+#[cfg(feature = "_async-tokio-internal")]
+compile_error!("Tokio async backend is not yet implemented");
 
 #[derive(Debug)]
 /// Data for an event
@@ -35,8 +42,38 @@ pub struct Event {
     pub data: EventData,
 }
 
-/// Run the game main loop, using a specific function
-pub fn main_loop(loop_fn: impl FnMut() + 'static) {
+/// Initialize the care game engine, including all loaded modules
+///
+/// This is normally called automatically
+pub fn init_all(window_name: &str) {
+    #[cfg(feature = "window")]
+    window::init();
+    #[cfg(feature = "window")]
+    window::open(window_name);
+    #[cfg(feature = "graphics")]
+    graphics::init();
+}
+
+/// End the frame, resetting everything for the next frame
+///
+/// This is normally called automatically
+pub fn end_frame() {
+    #[cfg(feature = "graphics")]
+    graphics::present();
+    keyboard::reset();
+    mouse::reset();
+}
+
+/// Run the game main loop, using a specific function that gets called once per frame
+pub fn main_loop(mut loop_fn: impl FnMut() + 'static) {
+    main_loop_manual(move || {
+        loop_fn();
+        end_frame();
+    });
+}
+
+/// Like [care::event::main_loop], but you have to call [care::event::end_frame] stuff yourself
+pub fn main_loop_manual(loop_fn: impl FnMut() + 'static) {
     #[cfg(feature = "window")]
     crate::window::run(loop_fn);
     #[cfg(not(feature = "window"))]
@@ -45,25 +82,61 @@ pub fn main_loop(loop_fn: impl FnMut() + 'static) {
     }
 }
 
-/// Run the game main function, as an async function that must yield exactly once per frame
+#[cfg(all(feature = "async-custom", feature = "_async-tokio-internal"))]
+compile_error!("Only one async executor feature can be enabled at a time.");
+
+/// Run the game main function, as a single async function
 ///
-/// Eventually this will be reimplemented better, maybe with tokio
-pub fn main_async(mut fut: impl Future<Output = Infallible> + Unpin + 'static) {
-    // From the rust source code, a "no-op" waker, because there's only ever one future.
-    const VTABLE: RawWakerVTable = RawWakerVTable::new(
-        // Cloning just returns a new no-op raw waker
-        |_| RAW,
-        // `wake` does nothing
-        |_| {},
-        // `wake_by_ref` does nothing
-        |_| {},
-        // Dropping does nothing as we don't allocate anything
-        |_| {},
-        );
-    const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
-    main_loop(move || {
-        let val = Pin::new(&mut fut).poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
-    })
+/// This supports multiple async executors as backends
+pub fn main_async(fut: impl Future<Output = ()> + 'static) {
+    #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
+    polling::async_executor(fut, true);
+    #[cfg(feature = "async-custom")]
+    custom_async::async_executor(fut, true);
+    #[cfg(feature = "_async-tokio-internal")]
+    tokio_event::async_executor(fut, true);
+}
+
+/// Like [care::event::main_async], but you have to call [care::event::end_frame] stuff yourself
+/// after every frame
+pub fn main_async_manual(fut: impl Future<Output = ()> + 'static) {
+    #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
+    polling::async_executor(fut, false);
+    #[cfg(feature = "async-custom")]
+    custom_async::async_executor(fut, false);
+    #[cfg(feature = "_async-tokio-internal")]
+    tokio_event::async_executor(fut, false);
+}
+
+/// Await until the next frame
+pub async fn next_frame() {
+    #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
+    return polling::next_frame().await;
+    #[cfg(feature = "async-custom")]
+    return custom_async::next_frame().await;
+    #[cfg(feature = "_async-tokio-internal")]
+    return tokio_event::next_frame().await;
+}
+
+/// Await, immediately readying, so that other tasks can run along side this task without waiting
+/// for anything in particular
+pub async fn async_yield() {
+    #[cfg(feature = "async-custom")]
+    return custom_async::async_yield().await;
+    #[cfg(feature = "_async-tokio-internal")]
+    return tokio_event::async_yield().await;
+}
+
+/// Spawn an async task on the current executor
+///
+/// Panics on the "polling" executor
+pub fn spawn(task: impl Future<Output = ()> + 'static) {
+    #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
+    panic!("The polling/null executor does not support spawning multiple tasks.");
+    #[cfg(feature = "async-custom")]
+    return custom_async::spawn(task);
+    #[cfg(feature = "_async-tokio-internal")]
+    return tokio_event::spawn(task);
 }
 
 /// Process an event, this can only send events within the game, not emulate actual mouse motion or

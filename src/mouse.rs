@@ -49,11 +49,13 @@ pub fn is_released(button: i32) -> bool {
     get_state().read().released.contains(&button)
 }
 
+/// Process a mouse movement event, used internally to handle mouse events
 pub fn process_mouse_moved_event(position: Vec2) {
     let mut state = get_state().write();
     state.position = position;
 }
 
+/// Process a mouse button event, used internally to handle mouse events
 pub fn process_mouse_click_event(button: i32, pressed: bool) {
     let mut state = get_state().write();
     if pressed {

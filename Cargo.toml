@@ -17,16 +17,24 @@ rusttype = { version = "0.9", features = ["gpu_cache"], optional = true }
 winit = { version = "0.29", default_features = false, features = ["rwh_05", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"], optional = true }
 wgpu = { version = "0.18", optional = true }
 
+tokio = { version = "1", optional = true }
+
 [dev-dependencies]
 rand = "0.8"
 
 [features]
-default = ["graphics", "window"]
+default = ["graphics", "window", "async-custom"]
 # Use 64 bit floats instead of 32 bit floats everywhere
 f64 = []
 
 graphics = ["dep:wgpu", "dep:image", "dep:rusttype", "dep:pollster"]
 window = ["dep:winit", "graphics"]
+
+async-custom = []
+async-tokio = ["dep:tokio", "tokio/rt-multi-thread", "_async-tokio-internal"]
+async-tokio-single-thread = ["dep:tokio", "tokio/rt", "_async-tokio-internal"]
+
+_async-tokio-internal = []
 
 [workspace]
 members = [

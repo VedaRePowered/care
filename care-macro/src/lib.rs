@@ -123,19 +123,17 @@ fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::T
     let state_params = std::env::var(&"_CARE_INTERNAL_STATE_PARAMS")
         .ok()
         .unwrap_or_default();
-    let func_name = input.sig.ident.clone();
+    let func_name = format!("care_{}", input.sig.ident);
     let var_name = format!("_CARE_INTERNAL_{name}");
     if std::env::var(&var_name).is_ok() {
         return func.into();
     }
-    std::env::set_var(&var_name, func_name.to_string());
+    std::env::set_var(&var_name, func_name.clone());
 
     let state_vars: HashSet<_> = state_params
         .split(STATE_VAR_SEPARATOR)
         .filter(|s| !s.is_empty())
-        .map(|p| {
-            p.split_once(':').unwrap().0.trim().to_string()
-        })
+        .map(|p| p.split_once(':').unwrap().0.trim().to_string())
         .collect();
 
     let state_params = if input.sig.inputs.is_empty() {
@@ -143,9 +141,12 @@ fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::T
     } else {
         &state_params
     };
-    let new_params: TokenStream = state_params.replace(STATE_VAR_SEPARATOR, ",").parse().unwrap();
+    let new_params: TokenStream = state_params
+        .replace(STATE_VAR_SEPARATOR, ",")
+        .parse()
+        .unwrap();
     let asyncness = input.sig.asyncness;
-    let ident = input.sig.ident;
+    let ident = Ident::new(&func_name, input.sig.ident.span());
     let generics = input.sig.generics;
     let inputs = input.sig.inputs;
     let output = input.sig.output;
@@ -225,6 +226,14 @@ pub fn care_draw(
     care_macro_shared(func, "DRAW")
 }
 
+#[proc_macro_attribute]
+pub fn care_async_main(
+    _attr: proc_macro::TokenStream,
+    func: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    care_macro_shared(func, "ASYNC_MAIN")
+}
+
 #[proc_macro]
 pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // TODO: Config
@@ -238,6 +247,7 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let init_fn = std::env::var(format!("_CARE_INTERNAL_INIT")).ok();
     let update_fn = std::env::var(format!("_CARE_INTERNAL_UPDATE")).ok();
     let draw_fn = std::env::var(format!("_CARE_INTERNAL_DRAW")).ok();
+    let async_main_fn = std::env::var(format!("_CARE_INTERNAL_ASYNC_MAIN")).ok();
 
     let state_lets: TokenStream = std::env::var("_CARE_INTERNAL_STATE_DEFS")
         .ok()
@@ -250,8 +260,28 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .unwrap_or_else(TokenStream::new);
     let additional_params_trim: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
         .ok()
-        .map(|st| st.trim_start_matches(STATE_VAR_SEPARATOR).replace(STATE_VAR_SEPARATOR, ",").parse().unwrap())
+        .map(|st| {
+            st.trim_start_matches(STATE_VAR_SEPARATOR)
+                .replace(STATE_VAR_SEPARATOR, ",")
+                .parse()
+                .unwrap()
+        })
         .unwrap_or_else(TokenStream::new);
+
+    if (init_fn.is_some() || update_fn.is_some() || draw_fn.is_some()) && async_main_fn.is_some() {
+        panic!("You cannot define a #[care::async] function along with any other #[care::init], #[care::update] or #[care::draw] function.");
+    }
+    if let Some(async_main_fn) = async_main_fn {
+        let fn_ident = Ident::new(&async_main_fn, Span::call_site());
+        return quote! {
+            fn main() {
+                let config = { #conf };
+                ::care::event::init_all(env!("CARGO_CRATE_NAME"));
+                #state_lets
+                ::care::event::main_async(#fn_ident(#additional_params_trim));
+            }
+        }.into();
+    }
 
     let init_call = maybe_call_function(init_fn, quote! {app_args #additional_params});
     let update_call = maybe_call_function(update_fn, quote! {delta_time #additional_params});
@@ -260,12 +290,7 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let result = quote! {
         fn main() {
             let config = { #conf };
-            //#[cfg(feature = "window")] // Not how to do this
-            ::care::window::init();
-            //#[cfg(feature = "window")]
-            ::care::window::open(&env!("CARGO_CRATE_NAME"));
-            //#[cfg(feature = "graphics")]
-            ::care::graphics::init();
+            ::care::event::init_all(env!("CARGO_CRATE_NAME"));
             #state_lets
             let app_args: Vec<_> = ::std::env::args().collect();
             #init_call
@@ -275,14 +300,8 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 let delta_time = next_time.duration_since(last_time).as_secs_f64() as ::care::math::Fl;
                 last_time = next_time;
                 #update_call
-                //#[cfg(feature = "graphics")]
-                {
-                    #draw_call
-                    ::care::graphics::present();
-                }
+                #draw_call
                 let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
-                ::care::keyboard::reset();
-                ::care::mouse::reset();
             });
         }
     };
