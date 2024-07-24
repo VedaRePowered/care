@@ -24,8 +24,9 @@ struct VertexInput {
 	@location(0) position: vec2<f32>,
 	@location(1) uv: vec2<f32>,
 	@location(2) colour: vec4<f32>,
-	@location(3) rounding: f32,
-	@location(4) tex: u32,
+	@location(3) rounding_box: vec4<f32>,
+	@location(4) rounding_values: vec4<f32>,
+	@location(5) tex: u32,
 }
 
 struct VertexOutput {
@@ -33,7 +34,8 @@ struct VertexOutput {
 	@location(0) colour: vec4<f32>,
 	@location(1) uv: vec2<f32>,
 	@location(2) tex: u32,
-	@location(3) circle: i32,
+	@location(3) rounding_box: vec4<f32>,
+	@location(4) rounding_values: vec4<f32>,
 };
 
 @vertex
@@ -43,15 +45,44 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	out.colour = in.colour;
 	out.uv = in.uv;
 	out.tex = in.tex;
-	out.circle = i32(in.rounding >= 0.5);
+	out.rounding_box = in.rounding_box;
+	out.rounding_values = in.rounding_values/2.0;
 	return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+	if
+		in.uv.x < in.rounding_box.x ||
+		in.uv.y < in.rounding_box.y ||
+		in.uv.x > in.rounding_box.x + in.rounding_box.z ||
+		in.uv.y > in.rounding_box.y + in.rounding_box.w
+	{
+		discard;
+	}
+	var scaled_uv = (in.uv - in.rounding_box.xy) / in.rounding_box.zw;
+	var quadrant = scaled_uv > vec2<f32>(0.5, 0.5);
+	var radius = select(
+		select(in.rounding_values.x, in.rounding_values.y, quadrant.x),
+		select(in.rounding_values.z, in.rounding_values.w, quadrant.x),
+		quadrant.y,
+	);
+	var scaled_radius = vec2<f32>(radius);//in.rounding_box.zw;
+	var center = in.rounding_box.xy + vec2<f32>(
+		select(scaled_radius.x, in.rounding_box.z-scaled_radius.x, quadrant.x),
+		select(scaled_radius.y, in.rounding_box.w-scaled_radius.y, quadrant.y),
+	);
+	if
+		select(center.x-in.uv.x, in.uv.x-center.x, quadrant.x) > 0.0 &&
+		select(center.y-in.uv.y, in.uv.y-center.y, !quadrant.y) < 0.0 &&
+		length(in.uv-center) > radius {
+		discard;
+	}
+	/*
 	if in.circle != 0 && length(in.uv-vec2<f32>(0.5, 0.5)) > 0.5 {
 		discard;
 	}
+	*/
 	var out: vec4<f32> = in.colour;
 	switch in.tex {
 		case 1u: { out *= textureSample(texture_0, sampler_0, in.uv); }
