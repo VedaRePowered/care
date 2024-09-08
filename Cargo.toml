@@ -1,6 +1,6 @@
 [package]
 name = "care"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
@@ -24,7 +24,7 @@ tokio = { version = "1", optional = true }
 rand = "0.8"
 
 [features]
-default = ["graphics", "window", "async-custom"]
+default = ["graphics", "window", "async-tokio"]
 # Use 64 bit floats instead of 32 bit floats everywhere
 f64 = []
 

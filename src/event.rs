@@ -7,7 +7,7 @@ mod polling;
 #[cfg(feature = "async-custom")]
 mod custom_async;
 #[cfg(feature = "_async-tokio-internal")]
-compile_error!("Tokio async backend is not yet implemented");
+mod tokio_event;
 
 #[derive(Debug)]
 /// Data for an event
@@ -88,7 +88,7 @@ compile_error!("Only one async executor feature can be enabled at a time.");
 /// Run the game main function, as a single async function
 ///
 /// This supports multiple async executors as backends
-pub fn main_async(fut: impl Future<Output = ()> + 'static) {
+pub fn main_async(fut: impl Future<Output = ()> + 'static + Send) {
     #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
     polling::async_executor(fut, true);
     #[cfg(feature = "async-custom")]
@@ -99,7 +99,7 @@ pub fn main_async(fut: impl Future<Output = ()> + 'static) {
 
 /// Like [care::event::main_async], but you have to call [care::event::end_frame] stuff yourself
 /// after every frame
-pub fn main_async_manual(fut: impl Future<Output = ()> + 'static) {
+pub fn main_async_manual(fut: impl Future<Output = ()> + 'static + Send) {
     #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
     polling::async_executor(fut, false);
     #[cfg(feature = "async-custom")]
@@ -130,7 +130,7 @@ pub async fn async_yield() {
 /// Spawn an async task on the current executor
 ///
 /// Panics on the "polling" executor
-pub fn spawn(task: impl Future<Output = ()> + 'static) {
+pub fn spawn(task: impl Future<Output = ()> + 'static + Send) {
     #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
     panic!("The polling/null executor does not support spawning multiple tasks.");
     #[cfg(feature = "async-custom")]
