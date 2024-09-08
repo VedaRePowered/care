@@ -15,8 +15,8 @@
 //! To use this technique using this library, you'll want to use the server
 //! module to create a custom server that contains your game's core logic,
 //! and create a client that resets any variables that may be visible over
-//! the network to the values that are on the server. The [`client::SyncedValue`]
-//! and [`server::SyncedValue`] types might be helpful for this.
+//! the network to the values that are on the server. The [`sync::SyncedValue`]
+//! type might be helpful for this.
 //!
 //! # Trust everyone
 //! Trusting everyone means that each client handles it's own calculations
@@ -35,4 +35,5 @@
 
 pub mod server;
 pub mod client;
+pub mod sync;
 
