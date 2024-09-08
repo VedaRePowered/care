@@ -72,7 +72,7 @@ pub fn main_loop(mut loop_fn: impl FnMut() + 'static) {
     });
 }
 
-/// Like [care::event::main_loop], but you have to call [care::event::end_frame] stuff yourself
+/// Like [main_loop], but you have to call [end_frame] stuff yourself
 pub fn main_loop_manual(loop_fn: impl FnMut() + 'static) {
     #[cfg(feature = "window")]
     crate::window::run(loop_fn);
@@ -97,7 +97,7 @@ pub fn main_async(fut: impl Future<Output = ()> + 'static + Send) {
     tokio_event::async_executor(fut, true);
 }
 
-/// Like [care::event::main_async], but you have to call [care::event::end_frame] stuff yourself
+/// Like [main_async], but you have to call [end_frame] stuff yourself
 /// after every frame
 pub fn main_async_manual(fut: impl Future<Output = ()> + 'static + Send) {
     #[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]

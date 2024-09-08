@@ -1,6 +1,33 @@
 # Care
 Care is a very simple game framework focused solely on ease of use. The api is heavilty inspired by [Löve 2D](https://love2d.org/).
 
+## Hello World
+
+Here's the source code for hello world with care, making a window appear that displays "hello world" (using the love2d-inspired interface).
+
+```rs
+#[care::draw]
+fn draw() {
+    care::graphics::text("Hello, World!", (20, 20));
+}
+
+care::main!();
+```
+
+You can also use the async interface (inspired by macroquad) if you want:
+```rs
+#[care::async_main]
+async fn main() {
+    loop {
+        care::graphics::text("Hello, World!", (20, 20));
+
+        care::event::next_frame().await;
+    }
+}
+
+care::main!();
+```
+
 See examples in the examples directory or the rust doc for more information.
 
 ## Comparison with love2d
