@@ -10,7 +10,7 @@ use crate::math::{Mat3, Vec4};
 
 use super::{CareRenderState, Font, LineEndStyle, LineJoinStyle, Texture, Vertex2d};
 
-pub type WindowSurface = RwLock<(Surface, (u32, u32))>;
+pub type WindowSurface = RwLock<(Surface<'static>, (u32, u32))>;
 
 #[derive(Debug)]
 pub(crate) struct GraphicsState {
@@ -42,7 +42,8 @@ impl GraphicsState {
                 (
                     win.id(),
                     RwLock::new((
-                        unsafe { instance.create_surface(win) }
+                        instance
+                            .create_surface(unsafe { &*(win as *const winit::window::Window) })
                             .expect("Failed to create surface for window."),
                         (win.inner_size().width, win.inner_size().height),
                     )),
@@ -67,8 +68,9 @@ impl GraphicsState {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Care render device"),
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
+                    required_features: wgpu::Features::default(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::default(),
                 },
                 None,
             )
@@ -90,6 +92,7 @@ impl GraphicsState {
                 width: surf.1 .0,
                 height: surf.1 .1,
                 present_mode: surface_caps.present_modes[0],
+                desired_maximum_frame_latency: 2,
                 alpha_mode: surface_caps.alpha_modes[0],
                 view_formats: vec![],
             };
@@ -178,11 +181,13 @@ impl GraphicsState {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[Vertex2d::descriptor()],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_main",
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         // TODO: uhhh
                         format: wgpu::TextureFormat::Bgra8UnormSrgb,
@@ -206,6 +211,7 @@ impl GraphicsState {
                     alpha_to_coverage_enabled: false,
                 },
                 multiview: None,
+                cache: None,
             });
             (
                 pipeline,

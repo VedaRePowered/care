@@ -392,7 +392,9 @@ pub fn present() {
         let win = windows.iter().find(|w| w.id() == *output_key).unwrap();
         let mut output = state.window_surfaces[output_key].write();
         *output = (
-            unsafe { state.instance.create_surface(win) }
+            state
+                .instance
+                .create_surface(unsafe { &*(win as *const winit::window::Window) })
                 .expect("Failed to create surface for window."),
             (win.inner_size().width, win.inner_size().height),
         );
@@ -411,6 +413,7 @@ pub fn present() {
             width: output.1 .0,
             height: output.1 .1,
             present_mode: surface_caps.present_modes[0],
+            desired_maximum_frame_latency: 2,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };

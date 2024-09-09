@@ -5,11 +5,12 @@ use std::{
 
 use parking_lot::RwLock;
 use winit::{
+    application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{Event, KeyEvent, WindowEvent},
+    event::{KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key as WKey, NamedKey, SmolStr},
-    window::{Window, WindowBuilder},
+    window::Window,
 };
 
 use crate::{math::Vec2, prelude::Key};
@@ -82,7 +83,7 @@ pub fn open(name: &str) {
 /// # NOTE
 /// Can only be called from the main thread, calling on any other thread will panic.
 pub fn open_with_settings(settings: WindowSettings) {
-    // TODO: Be able to create windows in the main loop through some unholy and or unsafe {} pointer magic
+    // TODO: Be able to create windows in the main loop by adding windows to a queue and creating them in the main loop below
     if !HAS_INITIALIZED.load(Ordering::Acquire) {
         panic!("Attempted to open window before initializing the window library");
     }
@@ -91,18 +92,18 @@ pub fn open_with_settings(settings: WindowSettings) {
         let el = el_handle
             .as_ref()
             .expect("You must open windows from the main thread");
-        let mut wb = WindowBuilder::new()
+        let mut attribs = Window::default_attributes()
             .with_title(settings.name)
             .with_resizable(settings.resizable);
         if let Some(size) = settings.size {
-            wb = wb.with_inner_size(PhysicalSize::new(size.0.x, size.0.y));
+            attribs = attribs.with_inner_size(PhysicalSize::new(size.0.x, size.0.y));
         }
         if let Some(pos) = settings.pos {
-            wb = wb.with_position(PhysicalPosition::new(pos.0.x, pos.0.y));
+            attribs = attribs.with_position(PhysicalPosition::new(pos.0.x, pos.0.y));
         }
         WINDOWS
             .write()
-            .push(wb.build(el).expect("Failed to open window"));
+            .push(el.create_window(attribs).expect("Failed to open window"));
     });
 }
 
@@ -134,30 +135,31 @@ fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
     }
 }
 
-// Window implementation of the event loop running function
-pub(crate) fn run(mut loop_fn: impl FnMut()) {
-    EVENT_LOOP.with(move |el_call| {
-        let el = el_call
-            .write()
-            .take()
-            .expect("Event loop must be run from the main thread");
-        el.run(move |ev, event_loop| match ev {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
+struct AppHandler<T: FnMut()> {
+    loop_fn: T,
+}
+
+impl<T: FnMut()> ApplicationHandler for AppHandler<T> {
+    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        (self.loop_fn)();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        ev: WindowEvent,
+    ) {
+        match ev {
+            WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            Event::WindowEvent {
+            WindowEvent::KeyboardInput {
                 event:
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key,
-                                state,
-                                repeat,
-                                ..
-                            },
+                    KeyEvent {
+                        logical_key,
+                        state,
+                        repeat,
                         ..
                     },
                 ..
@@ -172,10 +174,7 @@ pub(crate) fn run(mut loop_fn: impl FnMut()) {
                     });
                 }
             }
-            Event::WindowEvent {
-                event: WindowEvent::CursorMoved { position, .. },
-                ..
-            } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 crate::event::handle_event(crate::event::Event {
                     timestamp: Instant::now(),
                     data: crate::event::EventData::MouseMoved {
@@ -183,10 +182,7 @@ pub(crate) fn run(mut loop_fn: impl FnMut()) {
                     },
                 });
             }
-            Event::WindowEvent {
-                event: WindowEvent::MouseInput { state, button, .. },
-                ..
-            } => {
+            WindowEvent::MouseInput { state, button, .. } => {
                 crate::event::handle_event(crate::event::Event {
                     timestamp: Instant::now(),
                     data: crate::event::EventData::MouseClick {
@@ -202,11 +198,18 @@ pub(crate) fn run(mut loop_fn: impl FnMut()) {
                     },
                 });
             }
-            Event::AboutToWait => {
-                loop_fn();
-            }
             _ => {}
-        })
-        .unwrap();
+        }
+    }
+}
+
+// Window implementation of the event loop running function
+pub(crate) fn run(loop_fn: impl FnMut()) {
+    EVENT_LOOP.with(move |el_call| {
+        let el = el_call
+            .write()
+            .take()
+            .expect("Event loop must be run from the main thread");
+        el.run_app(&mut AppHandler { loop_fn }).unwrap();
     });
 }

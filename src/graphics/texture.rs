@@ -1,6 +1,6 @@
 use std::{fmt::Debug, io::Cursor, path::Path, sync::Arc};
 
-use image::{io::Reader as ImageReader, DynamicImage, EncodableLayout, ImageFormat};
+use image::{DynamicImage, EncodableLayout, ImageFormat, ImageReader};
 
 use crate::math::{Vec2, Vec4};
 
