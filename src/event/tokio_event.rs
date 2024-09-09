@@ -6,7 +6,7 @@ use std::{
 use parking_lot::Mutex;
 use tokio::task;
 
-use super::{end_frame, main_loop};
+use super::{end_frame, main_loop_manual};
 
 static NEXT_FRAME_WAKERS: Mutex<Vec<Waker>> = Mutex::new(Vec::new());
 
@@ -16,7 +16,7 @@ pub fn async_executor(fut: impl Future<Output = ()> + 'static + Send, call_end_f
         .build()
         .unwrap();
     rt.spawn(fut);
-    main_loop(move || {
+    main_loop_manual(move || {
         let mut wakers = Vec::new();
         std::mem::swap(&mut wakers, &mut NEXT_FRAME_WAKERS.lock());
         for waker in wakers {

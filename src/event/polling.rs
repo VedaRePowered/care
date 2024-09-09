@@ -6,7 +6,7 @@ use std::{
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
-use crate::event::main_loop;
+use crate::event::main_loop_manual;
 
 pub fn async_executor(mut fut: impl Future<Output = ()> + 'static, call_end_frame: bool) {
     // From the rust source code, a "no-op" waker, because there's only ever one future.
@@ -21,7 +21,7 @@ pub fn async_executor(mut fut: impl Future<Output = ()> + 'static, call_end_fram
         |_| {},
     );
     const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
-    main_loop(move || {
+    main_loop_manual(move || {
         let _ = pin!(&mut async move { fut })
             .poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
         if call_end_frame {

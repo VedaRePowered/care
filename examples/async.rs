@@ -10,7 +10,7 @@ async fn secondary() {
 
 #[care::async_main]
 async fn main() {
-    care::event::spawn(secondary());
+    //care::event::spawn(secondary());
 
     let mut pos = Vec2::new(100, 100);
     loop {

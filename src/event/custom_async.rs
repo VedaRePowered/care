@@ -14,7 +14,7 @@ use std::{
 
 use parking_lot::RwLock;
 
-use crate::event::main_loop;
+use crate::event::main_loop_manual;
 
 use super::end_frame;
 
@@ -157,7 +157,7 @@ pub fn async_executor(fut: impl Future<Output = ()> + 'static, call_end_frame: b
         fut.await;
     }));
 
-    main_loop(move || {
+    main_loop_manual(move || {
         ASYNC_EXECUTOR.run_until_sleep();
         if call_end_frame {
             end_frame();
