@@ -33,7 +33,6 @@
 //! over the state of the game. [Dolphin](https://dolphin-emu.org/)'s netplay
 //! feature uses this approach.
 
-pub mod server;
 pub mod client;
+pub mod server;
 pub mod sync;
-

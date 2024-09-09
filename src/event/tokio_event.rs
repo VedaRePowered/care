@@ -1,4 +1,7 @@
-use std::{future::Future, task::{Poll, Waker}};
+use std::{
+    future::Future,
+    task::{Poll, Waker},
+};
 
 use parking_lot::Mutex;
 use tokio::task;

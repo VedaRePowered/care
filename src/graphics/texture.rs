@@ -1,10 +1,6 @@
-use std::{
-    fmt::Debug,
-    path::Path,
-    sync::Arc, io::Cursor,
-};
+use std::{fmt::Debug, io::Cursor, path::Path, sync::Arc};
 
-use image::{DynamicImage, EncodableLayout, ImageFormat, io::Reader as ImageReader};
+use image::{io::Reader as ImageReader, DynamicImage, EncodableLayout, ImageFormat};
 
 use crate::math::{Vec2, Vec4};
 
@@ -27,7 +23,9 @@ impl Texture {
     }
     /// Creates a new texture by loading an image from encoded image data of an optionally specified format.
     pub fn new_from_file_format(file_data: &[u8], format_hint: Option<ImageFormat>) -> Self {
-        let mut image = ImageReader::new(Cursor::new(file_data)).with_guessed_format().unwrap();
+        let mut image = ImageReader::new(Cursor::new(file_data))
+            .with_guessed_format()
+            .unwrap();
         if let Some(fmt) = format_hint {
             image.set_format(fmt);
         }
@@ -74,7 +72,7 @@ impl Texture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &data,
+            data,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * width),
@@ -150,4 +148,3 @@ impl TextureHandle {
         ]
     }
 }
-

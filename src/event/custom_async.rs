@@ -1,9 +1,15 @@
 //! Slightly less simple async backend that actually supports some basic spawning functionality
-//! 
+//!
 //! If it isn't _very_ obvious, I have absolutely no idea what I'm doing here.
 
 use std::{
-    future::Future, pin::{pin, Pin}, sync::{atomic::{AtomicBool, AtomicI32, Ordering}, Arc}, task::{Context, Poll, RawWaker, RawWakerVTable, Waker}
+    future::Future,
+    pin::{pin, Pin},
+    sync::{
+        atomic::{AtomicBool, AtomicI32, Ordering},
+        Arc,
+    },
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
 use parking_lot::RwLock;
@@ -56,7 +62,8 @@ impl Executor {
                     any_awake = true;
                     AWAIT_REASON.store(AwaitReason::Waker as i32, Ordering::Relaxed);
                     let awake_bool = tasks[i].awake.clone();
-                    let result = pin!(&mut tasks[i].future).poll(&mut Context::from_waker(&create_waker(awake_bool)));
+                    let result = pin!(&mut tasks[i].future)
+                        .poll(&mut Context::from_waker(&create_waker(awake_bool)));
                     if let Poll::Ready(_) = result {
                         tasks.swap_remove(i);
                         remove = true;
@@ -115,12 +122,8 @@ impl From<i32> for AwaitReason {
 
 static AWAIT_REASON: AtomicI32 = AtomicI32::new(0);
 
-const WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
-    waker_clone,
-    waker_wake,
-    waker_wake_by_ref,
-    waker_drop,
-);
+const WAKER_VTABLE: RawWakerVTable =
+    RawWakerVTable::new(waker_clone, waker_wake, waker_wake_by_ref, waker_drop);
 
 fn waker_clone(waker: *const ()) -> RawWaker {
     let waker = unsafe { &*(waker as *const Arc<AtomicBool>) };

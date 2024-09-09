@@ -4,8 +4,7 @@ use care::graphics::Texture;
 static tex: Texture = Texture::new("examples/test.png");
 
 #[care::init]
-fn init(_args: Vec<String>) {
-}
+fn init(_args: Vec<String>) {}
 
 #[care::draw]
 fn draw() {

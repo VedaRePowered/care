@@ -1,6 +1,10 @@
 //! Simple async backend that uses polling
 
-use std::{future::Future, pin::Pin, task::{Context, Poll, RawWaker, RawWakerVTable, Waker}};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
+};
 
 use crate::event::main_loop;
 
@@ -15,10 +19,11 @@ pub fn async_executor(mut fut: impl Future<Output = ()> + 'static, call_end_fram
         |_| {},
         // Dropping does nothing as we don't allocate anything
         |_| {},
-        );
+    );
     const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
     main_loop(move || {
-        let _ = pin!(&mut async move { fut }).poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
+        let _ = pin!(&mut async move { fut })
+            .poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
         if call_end_frame {
             end_frame();
         }
@@ -37,4 +42,3 @@ pub async fn next_frame() {
     })
     .await;
 }
-

@@ -102,18 +102,15 @@ pub fn open_with_settings(settings: WindowSettings) {
         }
         WINDOWS
             .write()
-            .push(wb.build(&el).expect("Failed to open window"));
+            .push(wb.build(el).expect("Failed to open window"));
     });
 }
 
 /// WIP Function to set the main window size
 pub fn set_window_size(size: impl Into<Vec2>) {
     let size = size.into();
-    let mut windows = WINDOWS
-        .write();
-    let window = windows
-        .first_mut()
-        .unwrap();
+    let mut windows = WINDOWS.write();
+    let window = windows.first_mut().unwrap();
     let _ = window.request_inner_size(PhysicalSize::new(size.x(), size.y()));
 }
 

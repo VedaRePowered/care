@@ -204,7 +204,12 @@ impl Mat2 {
     }
     /// Create a new matrix from the 4 components, column major
     pub fn new(x1: impl IntoFl, y1: impl IntoFl, x2: impl IntoFl, y2: impl IntoFl) -> Self {
-        Mat2(Matrix2::new(x1.into_fl(), y1.into_fl(), x2.into_fl(), y2.into_fl()))
+        Mat2(Matrix2::new(
+            x1.into_fl(),
+            y1.into_fl(),
+            x2.into_fl(),
+            y2.into_fl(),
+        ))
     }
 }
 
@@ -213,7 +218,7 @@ impl Vec2 {
     /// Return a version of this vector that has been rotated by `rotation` radians clockwise
     pub fn rotated(&self, rotation: Fl) -> Self {
         let (s, c) = (rotation.sin(), rotation.cos());
-        Self::new(self.0.x*c + self.0.y*s, self.0.y*c - self.0.x*s)
+        Self::new(self.0.x * c + self.0.y * s, self.0.y * c - self.0.x * s)
     }
     /// Return a version of this vector that's been rotated by 90 degrees clockwise
     pub fn tangent(&self) -> Self {
@@ -244,10 +249,10 @@ impl std::ops::Mul<Vec2> for &Mat2 {
 /// Good set of default imports
 pub mod prelude {
     pub use super::Fl;
-    pub use super::Vec2;
-    pub use super::Vec3;
-    pub use super::Vec4;
     pub use super::Mat2;
     pub use super::Mat3;
     pub use super::Mat4;
+    pub use super::Vec2;
+    pub use super::Vec3;
+    pub use super::Vec4;
 }

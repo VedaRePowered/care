@@ -10,13 +10,15 @@ use crate::math::{Mat3, Vec4};
 
 use super::{CareRenderState, Font, LineEndStyle, LineJoinStyle, Texture, Vertex2d};
 
+pub type WindowSurface = RwLock<(Surface, (u32, u32))>;
+
 #[derive(Debug)]
 pub(crate) struct GraphicsState {
     pub instance: Instance,
     pub adapter: Adapter,
     pub device: Device,
     pub queue: Queue,
-    pub window_surfaces: HashMap<WindowId, RwLock<(Surface, (u32, u32))>>,
+    pub window_surfaces: HashMap<WindowId, WindowSurface>,
     pub render_pipeline_2d: RenderPipeline,
     pub vertex_buffer_2d: RwLock<Buffer>,
     pub index_buffer_2d: RwLock<Buffer>,
@@ -73,15 +75,14 @@ impl GraphicsState {
             .block_on()
             .expect("No graphics device found in adapter");
 
-        for (_, surf) in &window_surfaces {
+        for surf in window_surfaces.values() {
             let surf = surf.read();
             let surface_caps = surf.0.get_capabilities(&adapter);
             let surface_format = surface_caps
                 .formats
                 .iter()
                 .copied()
-                .filter(|f| f.is_srgb())
-                .next()
+                .find(|f| f.is_srgb())
                 .unwrap_or(surface_caps.formats[0]);
             let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

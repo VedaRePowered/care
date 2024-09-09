@@ -12,7 +12,7 @@ use super::{DrawCommand, DrawCommandData, GraphicsState, LineEndStyle, Texture, 
 
 /// Initialize the graphics library, must be called on the main thread!
 pub fn init() {
-    let state = GRAPHICS_STATE.get_or_init(|| GraphicsState::new());
+    let state = GRAPHICS_STATE.get_or_init(GraphicsState::new);
     state.placeholder_texture.get_or_init(|| {
         Texture::new_from_data(
             2,
@@ -304,6 +304,9 @@ pub fn line_varying_styles(
         .expect("Graphics not initialized")
         .care_render
         .write();
+    // Clippy detects this as an issue because when Fl = f32, the explicit conversions are not
+    // needed, but when Fl = f64, they are neccesary.
+    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
     let command = DrawCommand {
         transform: render.current_transform.clone(),
         colour: render.current_colour,
@@ -400,8 +403,7 @@ pub fn present() {
             .formats
             .iter()
             .copied()
-            .filter(|f| f.is_srgb())
-            .next()
+            .find(|f| f.is_srgb())
             .unwrap_or(surface_caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

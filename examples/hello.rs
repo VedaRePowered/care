@@ -9,4 +9,3 @@ fn draw() {
 // as well as processing events and displaying the framebuffer every frame. You can pass a
 // care::Conf, or a function returning care::Conf, to this function to configure care.
 care::main!();
-

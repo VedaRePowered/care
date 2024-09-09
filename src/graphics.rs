@@ -12,9 +12,9 @@ pub use api::*;
 #[doc(inline)]
 pub use font::Font;
 #[doc(inline)]
-pub use texture::Texture;
-#[doc(inline)]
 pub use render_2d::{LineEndStyle, LineJoinStyle};
+#[doc(inline)]
+pub use texture::Texture;
 
 pub(crate) use graphics_state::{GraphicsState, GRAPHICS_STATE};
 pub(crate) use render_2d::*;

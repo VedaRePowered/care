@@ -9,11 +9,14 @@ pub trait Transferable<C = ()> {
 
 pub trait SyncManager<C = ()> {
     fn queue_sync<T>(&self, data: SyncedValue<T, C>)
-        where T: 'static + Transferable<C>;
+    where
+        T: 'static + Transferable<C>;
 }
 
 pub struct SyncedValue<T, C = ()>
-    where T: 'static + Transferable<C> {
+where
+    T: 'static + Transferable<C>,
+{
     id: usize,
     dirty: AtomicBool,
     inner: RwLock<T: 'static>,

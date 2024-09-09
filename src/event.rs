@@ -1,11 +1,16 @@
 use std::{future::Future, time::Instant};
 
-use crate::{graphics, keyboard::{self, Key}, math::Vec2, mouse, window};
+use crate::{
+    graphics,
+    keyboard::{self, Key},
+    math::Vec2,
+    mouse, window,
+};
 
-#[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
-mod polling;
 #[cfg(feature = "async-custom")]
 mod custom_async;
+#[cfg(not(any(feature = "async-custom", feature = "_async-tokio-internal")))]
+mod polling;
 #[cfg(feature = "_async-tokio-internal")]
 mod tokio_event;
 
@@ -145,6 +150,8 @@ pub fn handle_event(ev: Event) {
     match ev.data {
         EventData::KeyEvent { key, pressed } => crate::keyboard::process_key_event(key, pressed),
         EventData::MouseMoved { position } => crate::mouse::process_mouse_moved_event(position),
-        EventData::MouseClick { button, pressed } => crate::mouse::process_mouse_click_event(button, pressed),
+        EventData::MouseClick { button, pressed } => {
+            crate::mouse::process_mouse_click_event(button, pressed)
+        }
     }
 }

@@ -11,7 +11,7 @@ fn update(delta: f32) {
 
 #[care::draw]
 fn draw() {
-    care::graphics::rectangle((50, 50), (50.0*time.sin(), 50.0*time.cos()));
+    care::graphics::rectangle((50, 50), (50.0 * time.sin(), 50.0 * time.cos()));
 }
 
 care::main!();

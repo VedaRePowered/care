@@ -108,8 +108,8 @@ fn dereference_state_vars_stmt(stmt: &mut Stmt, vars: &HashSet<String>) {
     match stmt {
             syn::Stmt::Local(syn::Local {
                 init: Some(init), ..
-            }) => dereference_state_vars(&mut init.expr, &vars),
-            syn::Stmt::Expr(expr, _) => dereference_state_vars(expr, &vars),
+            }) => dereference_state_vars(&mut init.expr, vars),
+            syn::Stmt::Expr(expr, _) => dereference_state_vars(expr, vars),
             _ => {}
     }
 }
@@ -120,7 +120,7 @@ fn care_macro_shared(func: proc_macro::TokenStream, name: &str) -> proc_macro::T
         Ok(i) => i,
         Err(e) => return token_stream_with_error(func, e),
     };
-    let state_params = std::env::var(&"_CARE_INTERNAL_STATE_PARAMS")
+    let state_params = std::env::var("_CARE_INTERNAL_STATE_PARAMS")
         .ok()
         .unwrap_or_default();
     let func_name = format!("care_{}", input.sig.ident);
@@ -180,14 +180,14 @@ pub fn care_state(
         "_CARE_INTERNAL_STATE_DEFS",
         std::env::var("_CARE_INTERNAL_STATE_DEFS")
             .ok()
-            .unwrap_or_else(String::new)
+            .unwrap_or_default()
             + &quote! { let mut #ident_state: #ty = #expr; }.to_string(),
     );
     std::env::set_var(
         "_CARE_INTERNAL_STATE_PARAMS",
         std::env::var("_CARE_INTERNAL_STATE_PARAMS")
             .ok()
-            .unwrap_or_else(String::new)
+            .unwrap_or_default()
             + STATE_VAR_SEPARATOR
             + &quote! { #ident: &mut #ty }.to_string(),
     );
@@ -195,7 +195,7 @@ pub fn care_state(
         "_CARE_INTERNAL_STATE_ITEMS",
         std::env::var("_CARE_INTERNAL_STATE_ITEMS")
             .ok()
-            .unwrap_or_else(String::new)
+            .unwrap_or_default()
             + STATE_VAR_SEPARATOR
             + &quote! { &mut #ident_state }.to_string(),
     );
@@ -244,20 +244,20 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
         Err(e) => return token_stream_with_error(attr, e),
     };
 
-    let init_fn = std::env::var(format!("_CARE_INTERNAL_INIT")).ok();
-    let update_fn = std::env::var(format!("_CARE_INTERNAL_UPDATE")).ok();
-    let draw_fn = std::env::var(format!("_CARE_INTERNAL_DRAW")).ok();
-    let async_main_fn = std::env::var(format!("_CARE_INTERNAL_ASYNC_MAIN")).ok();
+    let init_fn = std::env::var("_CARE_INTERNAL_INIT").ok();
+    let update_fn = std::env::var("_CARE_INTERNAL_UPDATE").ok();
+    let draw_fn = std::env::var("_CARE_INTERNAL_DRAW").ok();
+    let async_main_fn = std::env::var("_CARE_INTERNAL_ASYNC_MAIN").ok();
 
     let state_lets: TokenStream = std::env::var("_CARE_INTERNAL_STATE_DEFS")
         .ok()
         .map(|st| st.parse().unwrap())
-        .unwrap_or_else(TokenStream::new);
+        .unwrap_or_default();
 
     let additional_params: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
         .ok()
         .map(|st| st.replace(STATE_VAR_SEPARATOR, ",").parse().unwrap())
-        .unwrap_or_else(TokenStream::new);
+        .unwrap_or_default();
     let additional_params_trim: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
         .ok()
         .map(|st| {
@@ -266,7 +266,7 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 .parse()
                 .unwrap()
         })
-        .unwrap_or_else(TokenStream::new);
+        .unwrap_or_default();
 
     if (init_fn.is_some() || update_fn.is_some() || draw_fn.is_some()) && async_main_fn.is_some() {
         panic!("You cannot define a #[care::async] function along with any other #[care::init], #[care::update] or #[care::draw] function.");
@@ -280,7 +280,8 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #state_lets
                 ::care::event::main_async(#fn_ident(#additional_params_trim));
             }
-        }.into();
+        }
+        .into();
     }
 
     let init_call = maybe_call_function(init_fn, quote! {app_args #additional_params});

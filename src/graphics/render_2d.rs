@@ -257,24 +257,21 @@ fn limit_dist(source: Vec2, dest: Vec2, max_dist: Fl) -> Vec2 {
 fn helper_do_line_join(
     vertices: &mut Vec<Vertex2d>,
     vert_pos: &dyn Fn((Fl, Fl), Fl) -> [f32; 2],
-    point1: Vec2,
-    point2: Vec2,
-    point3: Vec2,
+    points: (Vec2, Vec2, Vec2),
     width: Fl,
     style: LineJoinStyle,
     colour: [u8; 4],
-    line1_idx: (u32, u32),
-    line2_idx: (u32, u32),
+    line_idx: ((u32, u32), (u32, u32)),
 ) -> Vec<u32> {
-    let norm1 = helper_line_segment_normal(point2, point1, width);
+    let norm1 = helper_line_segment_normal(points.1, points.0, width);
     let line1_points = (
-        Vec2::new(point2.x() - norm1.x(), point2.y() - norm1.y()),
-        Vec2::new(point2.x() + norm1.x(), point2.y() + norm1.y()),
+        Vec2::new(points.1.x() - norm1.x(), points.1.y() - norm1.y()),
+        Vec2::new(points.1.x() + norm1.x(), points.1.y() + norm1.y()),
     );
-    let norm2 = helper_line_segment_normal(point2, point3, width);
+    let norm2 = helper_line_segment_normal(points.1, points.2, width);
     let line2_points = (
-        Vec2::new(point2.x() + norm2.x(), point2.y() + norm2.y()),
-        Vec2::new(point2.x() - norm2.x(), point2.y() - norm2.y()),
+        Vec2::new(points.1.x() + norm2.x(), points.1.y() + norm2.y()),
+        Vec2::new(points.1.x() - norm2.x(), points.1.y() - norm2.y()),
     );
     match style {
         LineJoinStyle::None => vec![],
@@ -284,23 +281,23 @@ fn helper_do_line_join(
                 (line1_points.0, line1_points.0 - norm1.tangent()),
                 (line2_points.0, line2_points.0 - norm2.tangent()),
             )
-            .unwrap_or(point2);
+            .unwrap_or(points.1);
             let point_b = line_line_intersect(
                 (line1_points.1, line1_points.1 - norm1.tangent()),
                 (line2_points.1, line2_points.1 - norm2.tangent()),
             )
-            .unwrap_or(point2);
+            .unwrap_or(points.1);
             let (point_a, point_b) = if style == LineJoinStyle::Miter {
                 (
-                    limit_dist(point2, point_a, width * 2.0),
-                    limit_dist(point2, point_b, width * 2.0),
+                    limit_dist(points.1, point_a, width * 2.0),
+                    limit_dist(points.1, point_b, width * 2.0),
                 )
             } else {
                 (point_a, point_b)
             };
             let n = vertices.len() as u32;
             vertices.push(Vertex2d {
-                position: vert_pos((point2.x(), point2.y()), 0.0),
+                position: vert_pos((points.1.x(), points.1.y()), 0.0),
                 uv: uv_pos(Vec2::new(0, 0)),
                 colour,
                 rounding_box: uv_bb(Vec2::new(0, 0), Vec2::new(1, 1)),
@@ -325,30 +322,37 @@ fn helper_do_line_join(
             });
             vec![
                 n,
-                line1_idx.0,
-                line2_idx.0,
+                line_idx.0 .0,
+                line_idx.1 .0,
                 n + 1,
-                line2_idx.0,
-                line1_idx.0,
+                line_idx.1 .0,
+                line_idx.0 .0,
                 n,
-                line1_idx.1,
-                line2_idx.1,
+                line_idx.0 .1,
+                line_idx.1 .1,
                 n + 2,
-                line2_idx.1,
-                line1_idx.1,
+                line_idx.1 .1,
+                line_idx.0 .1,
             ]
         }
         LineJoinStyle::Bevel => {
             let n = vertices.len() as u32;
             vertices.push(Vertex2d {
-                position: vert_pos((point2.x(), point2.y()), 0.0),
+                position: vert_pos((points.1.x(), points.1.y()), 0.0),
                 uv: uv_pos(Vec2::new(0, 0)),
                 colour,
                 rounding_box: uv_bb(Vec2::new(0, 0), Vec2::new(1, 1)),
                 rounding_values: [0, 0, 0, 0],
                 tex: 0,
             });
-            vec![n, line1_idx.0, line2_idx.0, n, line2_idx.1, line1_idx.1]
+            vec![
+                n,
+                line_idx.0 .0,
+                line_idx.1 .0,
+                n,
+                line_idx.1 .1,
+                line_idx.0 .1,
+            ]
         }
         LineJoinStyle::Rounded => vec![], // TODO
     }
@@ -383,10 +387,7 @@ impl CareRenderState {
         for command in self.commands.drain(..) {
             let vert_pos = |v: (Fl, Fl), rot: Fl| {
                 let v = (&command.transform) * Vec2::from(v).rotated(rot);
-                [
-                    v.x() / screen_size.x(),
-                    v.y() / screen_size.y(),
-                ]
+                [v.x() / screen_size.x(), v.y() / screen_size.y()]
             };
             let colour = [
                 (command.colour.0.x * 255.99) as u8,
@@ -407,7 +408,7 @@ impl CareRenderState {
                     } else {
                         (Vec2::new(1, size.x() / size.y()), 2.0 / size.y())
                     };
-                    let corner_radii = corner_radii.map(|n| (n*255.9).clamp(0.0, 255.0) as u8);
+                    let corner_radii = corner_radii.map(|n| (n * 255.9).clamp(0.0, 255.0) as u8);
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.x(), pos.y()), rotation),
                         uv: uv_pos(Vec2::new(0, 0)),
@@ -457,7 +458,7 @@ impl CareRenderState {
                     let size = tex_size * scale;
                     let uv_base = source.0 / tex_size;
                     let uv_size = source.1 / tex_size;
-                    let corner_radii = corner_radii.map(|n| (n*255.9).clamp(0.0, 255.0) as u8);
+                    let corner_radii = corner_radii.map(|n| (n * 255.9).clamp(0.0, 255.0) as u8);
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x, pos.0.y), rotation),
                         uv: uv_pos(Vec2::new(uv_base.x(), uv_base.y())),
@@ -484,7 +485,10 @@ impl CareRenderState {
                     });
                     cdc.vertices.push(Vertex2d {
                         position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), rotation),
-                        uv: uv_pos(Vec2::new(uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y())),
+                        uv: uv_pos(Vec2::new(
+                            uv_base.x() + uv_size.x(),
+                            uv_base.y() + uv_size.y(),
+                        )),
                         colour,
                         rounding_box: uv_bb(uv_base, uv_size),
                         rounding_values: corner_radii,
@@ -528,7 +532,10 @@ impl CareRenderState {
                         });
                         cdc.vertices.push(Vertex2d {
                             position: vert_pos((pos.0.x + size.0.x, pos.0.y + size.0.y), 0.0),
-                            uv: uv_pos(Vec2::new(uv_base.x() + uv_size.x(), uv_base.y() + uv_size.y())),
+                            uv: uv_pos(Vec2::new(
+                                uv_base.x() + uv_size.x(),
+                                uv_base.y() + uv_size.y(),
+                            )),
                             colour,
                             rounding_box: uv_bb(Vec2::new(0, 0), Vec2::new(1, 1)),
                             rounding_values: [0, 0, 0, 0],
@@ -651,14 +658,11 @@ impl CareRenderState {
                             cdc.indices.append(&mut helper_do_line_join(
                                 &mut cdc.vertices,
                                 &vert_pos,
-                                segs[0].0,
-                                segs[1].0,
-                                segs[2].0,
+                                (segs[0].0, segs[1].0, segs[2].0),
                                 segs[1].1,
                                 segs[1].2,
                                 colour,
-                                (m, m + 1),
-                                n,
+                                ((m, m + 1), n),
                             ))
                         }
                     }
