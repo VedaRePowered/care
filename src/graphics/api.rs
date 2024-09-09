@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
 use parking_lot::RwLock;
-use wgpu::{rwh::{HasRawDisplayHandle, HasRawWindowHandle}, Buffer, Device, Queue};
+use wgpu::{
+    rwh::{HasRawDisplayHandle, HasRawWindowHandle},
+    Buffer, Device, Queue,
+};
 
 use crate::{
     graphics::LineJoinStyle,
@@ -438,7 +441,8 @@ pub fn present() {
     let max_textures = state.care_render.read().max_textures;
     let draw_calls = state.care_render.write().render(screen_size);
     let placeholder_tex = state.placeholder_texture.get().unwrap();
-    for draw_call in draw_calls {
+    for (i, draw_call) in draw_calls.into_iter().enumerate() {
+        let is_first_pass = i == 0;
         let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Temp Bind Group"),
             layout: &state.bind_group_layout_2d,
@@ -478,12 +482,16 @@ pub fn present() {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
+                        load: if is_first_pass {
+                            wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                            })
+                        } else {
+                            wgpu::LoadOp::Load
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],
