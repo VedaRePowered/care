@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use parking_lot::RwLock;
-use wgpu::{Buffer, Device, Queue};
+use wgpu::{rwh::{HasRawDisplayHandle, HasRawWindowHandle}, Buffer, Device, Queue};
 
 use crate::{
     graphics::LineJoinStyle,
@@ -391,10 +391,12 @@ pub fn present() {
         let windows = crate::window::WINDOWS.read();
         let win = windows.iter().find(|w| w.id() == *output_key).unwrap();
         let mut output = state.window_surfaces[output_key].write();
+        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
+            raw_display_handle: win.raw_display_handle().unwrap(),
+            raw_window_handle: win.raw_window_handle().unwrap(),
+        };
         *output = (
-            state
-                .instance
-                .create_surface(unsafe { &*(win as *const winit::window::Window) })
+            unsafe { state.instance.create_surface_unsafe(target) }
                 .expect("Failed to create surface for window."),
             (win.inner_size().width, win.inner_size().height),
         );

@@ -3,7 +3,10 @@ use std::{collections::HashMap, fmt::Debug, sync::OnceLock};
 use parking_lot::RwLock;
 use pollster::FutureExt;
 use rusttype::gpu_cache::Cache as FontCache;
-use wgpu::{Adapter, Buffer, Device, Instance, Queue, RenderPipeline, Surface};
+use wgpu::{
+    rwh::{HasRawDisplayHandle, HasRawWindowHandle},
+    Adapter, Buffer, Device, Instance, Queue, RenderPipeline, Surface,
+};
 use winit::window::WindowId;
 
 use crate::math::{Mat3, Vec4};
@@ -39,11 +42,14 @@ impl GraphicsState {
             .read()
             .iter()
             .map(|win| {
+                let target = wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: win.raw_display_handle().unwrap(),
+                    raw_window_handle: win.raw_window_handle().unwrap(),
+                };
                 (
                     win.id(),
                     RwLock::new((
-                        instance
-                            .create_surface(unsafe { &*(win as *const winit::window::Window) })
+                        unsafe { instance.create_surface_unsafe(target) }
                             .expect("Failed to create surface for window."),
                         (win.inner_size().width, win.inner_size().height),
                     )),

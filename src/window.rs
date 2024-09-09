@@ -140,7 +140,9 @@ struct AppHandler<T: FnMut()> {
 }
 
 impl<T: FnMut()> ApplicationHandler for AppHandler<T> {
-    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
+
+    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         (self.loop_fn)();
     }
 
