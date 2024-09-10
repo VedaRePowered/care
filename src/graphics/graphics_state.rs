@@ -98,7 +98,7 @@ impl GraphicsState {
                 width: surf.1 .0,
                 height: surf.1 .1,
                 present_mode: surface_caps.present_modes[0],
-                desired_maximum_frame_latency: 2,
+                desired_maximum_frame_latency: 10,
                 alpha_mode: surface_caps.alpha_modes[0],
                 view_formats: vec![],
             };
@@ -114,10 +114,9 @@ impl GraphicsState {
             // TODO: How do render textures / canvases relate to surfaces?
             current_surface: *window_surfaces.keys().next().unwrap(),
             commands: Vec::new(),
-            // TODO: Use an array to make this dynamic
-            max_textures: 16/*(limits.max_bindings_per_bind_group / 2)
+            max_textures: (limits.max_bindings_per_bind_group / 2)
                 .min(limits.max_sampled_textures_per_shader_stage)
-                .min(limits.max_samplers_per_shader_stage) as usize*/,
+                .min(limits.max_samplers_per_shader_stage) as usize,
             font_cache: FontCache::builder().dimensions(1024, 1024).build(),
             font_cache_texture: OnceLock::new(),
             default_font: Font::new_from_bytes_and_id(

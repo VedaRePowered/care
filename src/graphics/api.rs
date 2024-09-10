@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Duration};
 
 use parking_lot::RwLock;
 use wgpu::{
@@ -420,7 +420,7 @@ pub fn present() {
             width: output.1 .0,
             height: output.1 .1,
             present_mode: surface_caps.present_modes[0],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 10,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
@@ -443,29 +443,33 @@ pub fn present() {
     let max_textures = state.care_render.read().max_textures;
     let draw_calls = state.care_render.write().render(screen_size);
     let placeholder_tex = state.placeholder_texture.get().unwrap();
-    let vertices: Vec<Vertex2d> = draw_calls
-        .iter()
-        .flat_map(|v| &v.vertices)
-        .cloned()
-        .collect();
-    let indices: Vec<u32> = draw_calls
-        .iter()
-        .flat_map(|v| &v.indices)
-        .cloned()
-        .collect();
+    let vertices: ForceAlign<Vec<Vertex2d>> = ForceAlign(
+        draw_calls
+            .iter()
+            .flat_map(|v| &v.vertices)
+            .cloned()
+            .collect(),
+    );
+    let indices: ForceAlign<Vec<u32>> = ForceAlign(
+        draw_calls
+            .iter()
+            .flat_map(|v| &v.indices)
+            .cloned()
+            .collect(),
+    );
     upload_buffer(
         &state.device,
         &state.queue,
         &state.vertex_buffer_2d,
-        bytemuck::cast_slice(&vertices),
+        bytemuck::cast_slice(&vertices.0),
     );
     upload_buffer(
         &state.device,
         &state.queue,
         &state.index_buffer_2d,
-        bytemuck::cast_slice(&indices),
+        bytemuck::cast_slice(&indices.0),
     );
-    if vertices.is_empty() || indices.is_empty() {
+    if vertices.0.is_empty() || indices.0.is_empty() {
         state.care_render.write().reset();
         return;
     }
@@ -473,8 +477,7 @@ pub fn present() {
     let mut istart: wgpu::BufferAddress = 0;
     let draw_call_info: Vec<_> = draw_calls
         .into_iter()
-        .enumerate()
-        .filter_map(|(i, draw_call)| {
+        .filter_map(|draw_call| {
             let vend = vstart
                 + (draw_call.vertices.len() * std::mem::size_of::<Vertex2d>())
                     as wgpu::BufferAddress;
@@ -499,7 +502,12 @@ pub fn present() {
                     .collect::<Vec<_>>()
                     .as_slice(),
             });
-            let uwu = (vstart..vend, istart..iend, bind_group, draw_call.indices.len());
+            let uwu = (
+                vstart..vend,
+                istart..iend,
+                bind_group,
+                draw_call.indices.len(),
+            );
             vstart = vend;
             istart = iend;
             Some(uwu)
@@ -538,7 +546,11 @@ pub fn present() {
     }
 
     state.queue.submit([encoder.finish()]);
+    std::thread::sleep(Duration::from_millis(2));
     output.present();
 
     state.care_render.write().reset();
 }
+
+#[repr(C, align(256))]
+struct ForceAlign<T>(T);
