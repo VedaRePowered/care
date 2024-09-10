@@ -115,7 +115,7 @@ impl GraphicsState {
             current_surface: *window_surfaces.keys().next().unwrap(),
             commands: Vec::new(),
             // TODO: Use an array to make this dynamic
-            max_textures: 4/*(limits.max_bindings_per_bind_group / 2)
+            max_textures: 16/*(limits.max_bindings_per_bind_group / 2)
                 .min(limits.max_sampled_textures_per_shader_stage)
                 .min(limits.max_samplers_per_shader_stage) as usize*/,
             font_cache: FontCache::builder().dimensions(1024, 1024).build(),

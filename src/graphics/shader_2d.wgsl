@@ -20,6 +20,66 @@ var texture_3: texture_2d<f32>;
 @group(0) @binding(7)
 var sampler_3: sampler;
 
+@group(0) @binding(8)
+var texture_4: texture_2d<f32>;
+@group(0) @binding(9)
+var sampler_4: sampler;
+
+@group(0) @binding(10)
+var texture_5: texture_2d<f32>;
+@group(0) @binding(11)
+var sampler_5: sampler;
+
+@group(0) @binding(12)
+var texture_6: texture_2d<f32>;
+@group(0) @binding(13)
+var sampler_6: sampler;
+
+@group(0) @binding(14)
+var texture_7: texture_2d<f32>;
+@group(0) @binding(15)
+var sampler_7: sampler;
+
+@group(0) @binding(16)
+var texture_8: texture_2d<f32>;
+@group(0) @binding(17)
+var sampler_8: sampler;
+
+@group(0) @binding(18)
+var texture_9: texture_2d<f32>;
+@group(0) @binding(19)
+var sampler_9: sampler;
+
+@group(0) @binding(20)
+var texture_10: texture_2d<f32>;
+@group(0) @binding(21)
+var sampler_10: sampler;
+
+@group(0) @binding(22)
+var texture_11: texture_2d<f32>;
+@group(0) @binding(23)
+var sampler_11: sampler;
+
+@group(0) @binding(24)
+var texture_12: texture_2d<f32>;
+@group(0) @binding(25)
+var sampler_12: sampler;
+
+@group(0) @binding(26)
+var texture_13: texture_2d<f32>;
+@group(0) @binding(27)
+var sampler_13: sampler;
+
+@group(0) @binding(28)
+var texture_14: texture_2d<f32>;
+@group(0) @binding(29)
+var sampler_14: sampler;
+
+@group(0) @binding(30)
+var texture_15: texture_2d<f32>;
+@group(0) @binding(31)
+var sampler_15: sampler;
+
 struct VertexInput {
 	@location(0) position: vec2<f32>,
 	@location(1) uv: vec2<f32>,
@@ -89,6 +149,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 		case 2u: { out *= textureSample(texture_1, sampler_1, in.uv); }
 		case 3u: { out *= textureSample(texture_2, sampler_2, in.uv); }
 		case 4u: { out *= textureSample(texture_3, sampler_3, in.uv); }
+		case 5u: { out *= textureSample(texture_4, sampler_4, in.uv); }
+		case 6u: { out *= textureSample(texture_5, sampler_5, in.uv); }
+		case 7u: { out *= textureSample(texture_6, sampler_6, in.uv); }
+		case 8u: { out *= textureSample(texture_7, sampler_7, in.uv); }
+		case 9u: { out *= textureSample(texture_8, sampler_8, in.uv); }
+		case 10u: { out *= textureSample(texture_9, sampler_9, in.uv); }
+		case 11u: { out *= textureSample(texture_10, sampler_10, in.uv); }
+		case 12u: { out *= textureSample(texture_11, sampler_11, in.uv); }
+		case 13u: { out *= textureSample(texture_12, sampler_12, in.uv); }
+		case 14u: { out *= textureSample(texture_13, sampler_13, in.uv); }
+		case 15u: { out *= textureSample(texture_14, sampler_14, in.uv); }
+		case 16u: { out *= textureSample(texture_15, sampler_15, in.uv); }
 		default: { }
 	}
 	return out;

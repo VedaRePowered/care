@@ -11,7 +11,9 @@ use crate::{
     math::{IntoFl, Vec2, Vec4},
 };
 
-use super::{DrawCommand, DrawCommandData, GraphicsState, LineEndStyle, Texture, GRAPHICS_STATE};
+use super::{
+    DrawCommand, DrawCommandData, GraphicsState, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE,
+};
 
 /// Initialize the graphics library, must be called on the main thread!
 pub fn init() {
@@ -441,71 +443,100 @@ pub fn present() {
     let max_textures = state.care_render.read().max_textures;
     let draw_calls = state.care_render.write().render(screen_size);
     let placeholder_tex = state.placeholder_texture.get().unwrap();
-    for (i, draw_call) in draw_calls.into_iter().enumerate() {
-        let is_first_pass = i == 0;
-        let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Temp Bind Group"),
-            layout: &state.bind_group_layout_2d,
-            entries: (0..max_textures)
-                .flat_map(|i| {
-                    (if let Some(tex) = draw_call.textures.get(i) {
-                        tex
-                    } else {
-                        placeholder_tex
-                    })
-                    .0
-                    .bind_group_entries(i as u32)
-                })
-                .collect::<Vec<_>>()
-                .as_slice(),
-        });
-
-        upload_buffer(
-            &state.device,
-            &state.queue,
-            &state.vertex_buffer_2d,
-            bytemuck::cast_slice(&draw_call.vertices),
-        );
-        upload_buffer(
-            &state.device,
-            &state.queue,
-            &state.index_buffer_2d,
-            bytemuck::cast_slice(&draw_call.indices),
-        );
-        let vert = state.vertex_buffer_2d.read();
-        let idx = state.index_buffer_2d.read();
-        {
-            // Render pass time
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("2D Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: if is_first_pass {
-                            wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 0.0,
-                                a: 1.0,
-                            })
+    let vertices: Vec<Vertex2d> = draw_calls
+        .iter()
+        .flat_map(|v| &v.vertices)
+        .cloned()
+        .collect();
+    let indices: Vec<u32> = draw_calls
+        .iter()
+        .flat_map(|v| &v.indices)
+        .cloned()
+        .collect();
+    upload_buffer(
+        &state.device,
+        &state.queue,
+        &state.vertex_buffer_2d,
+        bytemuck::cast_slice(&vertices),
+    );
+    upload_buffer(
+        &state.device,
+        &state.queue,
+        &state.index_buffer_2d,
+        bytemuck::cast_slice(&indices),
+    );
+    if vertices.is_empty() || indices.is_empty() {
+        state.care_render.write().reset();
+        return;
+    }
+    let mut vstart: wgpu::BufferAddress = 0;
+    let mut istart: wgpu::BufferAddress = 0;
+    let draw_call_info: Vec<_> = draw_calls
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, draw_call)| {
+            let vend = vstart
+                + (draw_call.vertices.len() * std::mem::size_of::<Vertex2d>())
+                    as wgpu::BufferAddress;
+            let iend = istart
+                + (draw_call.indices.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+            if vend == vstart || iend == istart {
+                return None;
+            }
+            let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Temp Bind Group"),
+                layout: &state.bind_group_layout_2d,
+                entries: (0..max_textures)
+                    .flat_map(|i| {
+                        (if let Some(tex) = draw_call.textures.get(i) {
+                            tex
                         } else {
-                            wgpu::LoadOp::Load
-                        },
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
+                            placeholder_tex
+                        })
+                        .0
+                        .bind_group_entries(i as u32)
+                    })
+                    .collect::<Vec<_>>()
+                    .as_slice(),
             });
+            let uwu = (vstart..vend, istart..iend, bind_group, draw_call.indices.len());
+            vstart = vend;
+            istart = iend;
+            Some(uwu)
+        })
+        .collect();
+    let vert = state.vertex_buffer_2d.read();
+    let idx = state.index_buffer_2d.read();
+    {
+        // Render pass time
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("2D Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        for (vrange, irange, bind_group, indices_count) in draw_call_info {
             render_pass.set_pipeline(&state.render_pipeline_2d);
             render_pass.set_bind_group(0, &bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vert.slice(..));
-            render_pass.set_index_buffer(idx.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..draw_call.indices.len() as u32, 0, 0..1);
+            render_pass.set_vertex_buffer(0, vert.slice(vrange));
+            render_pass.set_index_buffer(idx.slice(irange), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..indices_count as u32, 0, 0..1);
         }
     }
+
     state.queue.submit([encoder.finish()]);
     output.present();
 
