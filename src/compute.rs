@@ -46,3 +46,15 @@ pub fn is_complete() -> bool {
 
     device.is_complete()
 }
+
+#[cfg(feature = "graphics")]
+/// Create a care texture, to be used in the [`crate::grapics`] module, from a compute texture binding
+///
+/// These textures will share the same storage in gpu memory, and as such any modification to the
+/// texture from the compute shader will be observed in the graphics module when the texture is
+/// rendered.
+pub fn get_texture_from_binding<T: wrgpgpu::bindings::texture::TextureBindType>(
+    binding: wrgpgpu::TextureBind<image::RgbaImage, T>,
+) -> crate::graphics::Texture {
+    crate::graphics::Texture::new_from_wgpu(binding.texture)
+}
