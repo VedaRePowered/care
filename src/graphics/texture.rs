@@ -92,6 +92,25 @@ impl Texture {
         });
         Texture(Arc::new(TextureHandle {
             size: Vec2::new(width, height),
+            texture: Arc::new(texture),
+            view,
+            sampler,
+        }))
+    }
+    pub(crate) fn new_from_wgpu(texture: Arc<wgpu::Texture>) -> Self {
+        let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = state.device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        Texture(Arc::new(TextureHandle {
+            size: Vec2::new(texture.width(), texture.height()),
             texture,
             view,
             sampler,
@@ -129,7 +148,7 @@ impl Texture {
 #[derive(Debug)]
 pub(crate) struct TextureHandle {
     pub(crate) size: Vec2,
-    pub(crate) texture: wgpu::Texture,
+    pub(crate) texture: Arc<wgpu::Texture>,
     pub(crate) view: wgpu::TextureView,
     pub(crate) sampler: wgpu::Sampler,
 }

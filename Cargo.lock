@@ -3054,9 +3054,8 @@ dependencies = [
 
 [[package]]
 name = "wrgpgpu"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ccdbc456f791cb637d5dea3e77ab32b85a44671198f86fa97057d54d4325aa7"
+version = "0.1.2"
+source = "git+https://gitlab.101100.ca/veda/wrgpgpu#b97ce73afec8b26a375cefab54ad3d164bbea35a"
 dependencies = [
  "bytemuck",
  "image",

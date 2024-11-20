@@ -16,7 +16,7 @@ rand = "0.8"
 rusttype = { version = "0.9", features = ["gpu_cache"], optional = true }
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"], optional = true }
 wgpu = { version = "23", optional = true }
-wrgpgpu = { version = "0.1", optional = true }
+wrgpgpu = { git = "https://gitlab.101100.ca/veda/wrgpgpu", optional = true }
 
 tokio = { version = "1", optional = true }
 
