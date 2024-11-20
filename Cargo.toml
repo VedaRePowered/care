@@ -15,7 +15,8 @@ pollster = { version = "0.3", optional = true }
 rand = "0.8"
 rusttype = { version = "0.9", features = ["gpu_cache"], optional = true }
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"], optional = true }
-wgpu = { version = "22", optional = true }
+wgpu = { version = "23", optional = true }
+wrgpgpu = { version = "0.1", optional = true }
 
 tokio = { version = "1", optional = true }
 
@@ -23,12 +24,13 @@ tokio = { version = "1", optional = true }
 rand = "0.8"
 
 [features]
-default = ["graphics", "window", "async-tokio"]
+default = ["graphics", "window", "compute", "async-tokio"]
 # Use 64 bit floats instead of 32 bit floats everywhere
 f64 = []
 
 graphics = ["dep:wgpu", "dep:image", "dep:rusttype", "dep:pollster"]
 window = ["dep:winit", "graphics"]
+compute = ["dep:wrgpgpu"]
 
 async-custom = []
 async-tokio = ["dep:tokio", "tokio/rt-multi-thread", "_async-tokio-internal"]

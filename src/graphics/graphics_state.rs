@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, sync::OnceLock};
+use std::{collections::HashMap, fmt::Debug, sync::{Arc, OnceLock}};
 
 use parking_lot::RwLock;
 use pollster::FutureExt;
@@ -19,8 +19,8 @@ pub type WindowSurface = RwLock<(Surface<'static>, (u32, u32))>;
 pub(crate) struct GraphicsState {
     pub instance: Instance,
     pub adapter: Adapter,
-    pub device: Device,
-    pub queue: Queue,
+    pub device: Arc<Device>,
+    pub queue: Arc<Queue>,
     pub window_surfaces: HashMap<WindowId, WindowSurface>,
     pub render_pipeline_2d: RenderPipeline,
     pub vertex_buffer_2d: RwLock<Buffer>,
@@ -186,17 +186,18 @@ impl GraphicsState {
                 layout: Some(&render_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[Vertex2d::descriptor()],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: "fs_main",
+                    entry_point: Some("fs_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        // TODO: uhhh
-                        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                        // TODO: uhhh this is sometimes BGRA on some computers I have... I probably
+                        // should find a function that gives me the colour space of the surface
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -230,8 +231,8 @@ impl GraphicsState {
         Self {
             instance,
             adapter,
-            device,
-            queue,
+            device: Arc::new(device),
+            queue: Arc::new(queue),
             window_surfaces,
             render_pipeline_2d,
             vertex_buffer_2d,

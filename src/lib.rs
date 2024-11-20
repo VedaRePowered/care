@@ -8,6 +8,9 @@ pub mod event;
 #[cfg(feature = "graphics")]
 /// Contains functions for rendering graphics
 pub mod graphics;
+#[cfg(feature = "compute")]
+/// Contains functions for using GPU Compute (GPGPU)
+pub mod compute;
 /// Stuff for working with a keyboard.
 pub mod keyboard;
 /// Contains functions for doing various math tasks, including working with vectors
