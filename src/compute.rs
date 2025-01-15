@@ -2,6 +2,16 @@ use std::sync::OnceLock;
 
 pub use wrgpgpu::*;
 
+/// Additional available bindings for the compute shader
+pub mod bind {
+    pub use wrgpgpu::bindings::buffer::*;
+    pub use wrgpgpu::bindings::texture::*;
+    pub use wrgpgpu::bindings::{Bind, BindGroup, BindGroupData, BindGroups};
+}
+
+pub use bind::{BindableImage, PlainTextureBind, RgbaStorageTextureBind, StorageTextureBind};
+pub use bind::{StorageBufferBind, StorageReadBufferBind, UniformBufferBind};
+
 static COMPUTE_DEVICE: OnceLock<wrgpgpu::Device> = OnceLock::new();
 
 fn new_compute_device() -> wrgpgpu::Device {
@@ -20,6 +30,20 @@ pub fn create_shader<B: wrgpgpu::bindings::BindGroups>(args: ShaderArgs<'_>) -> 
     let device = COMPUTE_DEVICE.get_or_init(new_compute_device);
 
     device.create_shader(args)
+}
+
+/// Create an empty bind (e.g. texture or buffer) to use with a compute shader.
+pub fn empty_bind<B: wrgpgpu::bindings::Bind>(create_info: B::CreateInfo) -> B {
+    let device = COMPUTE_DEVICE.get_or_init(new_compute_device);
+
+    B::new_empty(device, create_info)
+}
+
+/// Create an bind (e.g. texture or buffer) filled with initial data to use with a compute shader.
+pub fn init_bind<B: wrgpgpu::bindings::Bind>(data: B::Data) -> B {
+    let device = COMPUTE_DEVICE.get_or_init(new_compute_device);
+
+    B::new_init(device, data)
 }
 
 /// Create a bind group for use in a shader

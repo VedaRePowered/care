@@ -56,7 +56,7 @@ pub struct WindowSettings<'a> {
     pos: Option<Vec2>,
 }
 
-impl<'a> Default for WindowSettings<'a> {
+impl Default for WindowSettings<'_> {
     fn default() -> Self {
         Self {
             name: "CÄRE game",

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, sync::{Arc, OnceLock}};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, OnceLock},
+};
 
 use parking_lot::RwLock;
 use pollster::FutureExt;
