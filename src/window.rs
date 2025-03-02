@@ -6,7 +6,7 @@ use std::{
 use parking_lot::RwLock;
 use winit::{
     application::ApplicationHandler,
-    dpi::{PhysicalPosition, PhysicalSize},
+    dpi::{LogicalPosition, LogicalSize},
     event::{KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key as WKey, NamedKey, SmolStr},
@@ -96,10 +96,10 @@ pub fn open_with_settings(settings: WindowSettings) {
             .with_title(settings.name)
             .with_resizable(settings.resizable);
         if let Some(size) = settings.size {
-            attribs = attribs.with_inner_size(PhysicalSize::new(size.0.x, size.0.y));
+            attribs = attribs.with_inner_size(LogicalSize::new(size.0.x, size.0.y));
         }
         if let Some(pos) = settings.pos {
-            attribs = attribs.with_position(PhysicalPosition::new(pos.0.x, pos.0.y));
+            attribs = attribs.with_position(LogicalPosition::new(pos.0.x, pos.0.y));
         }
         WINDOWS
             .write()
@@ -112,7 +112,7 @@ pub fn set_window_size(size: impl Into<Vec2>) {
     let size = size.into();
     let mut windows = WINDOWS.write();
     let window = windows.first_mut().unwrap();
-    let _ = window.request_inner_size(PhysicalSize::new(size.x(), size.y()));
+    let _ = window.request_inner_size(LogicalSize::new(size.x(), size.y()));
 }
 
 fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
@@ -149,7 +149,7 @@ impl<T: FnMut()> ApplicationHandler for AppHandler<T> {
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
+        window_id: winit::window::WindowId,
         ev: WindowEvent,
     ) {
         match ev {
@@ -177,6 +177,14 @@ impl<T: FnMut()> ApplicationHandler for AppHandler<T> {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
+                let position: LogicalPosition<f64> = position.to_logical(
+                    WINDOWS
+                        .read()
+                        .iter()
+                        .find(|w| w.id() == window_id)
+                        .map(|w| w.scale_factor())
+                        .unwrap_or(1.0),
+                );
                 crate::event::handle_event(crate::event::Event {
                     timestamp: Instant::now(),
                     data: crate::event::EventData::MouseMoved {
