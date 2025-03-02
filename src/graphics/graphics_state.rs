@@ -88,7 +88,8 @@ impl GraphicsState {
             .block_on()
             .expect("No graphics device found in adapter");
 
-        for surf in window_surfaces.values() {
+        let mut surface_formats = HashMap::new();
+        for (key, surf) in &window_surfaces {
             let surf = surf.read();
             let surface_caps = surf.0.get_capabilities(&adapter);
             let surface_format = surface_caps
@@ -97,6 +98,7 @@ impl GraphicsState {
                 .copied()
                 .find(|f| f.is_srgb())
                 .unwrap_or(surface_caps.formats[0]);
+            surface_formats.insert(key, surface_format);
             let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: surface_format,
@@ -188,7 +190,7 @@ impl GraphicsState {
                 });
             // TODO: uhhh this is sometimes BGRA on some computers I have... I probably
             // should find a function that gives me the colour space of the surface
-            let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+            let surface_format = surface_formats[&render.current_surface];
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("2D Render Pipeline"),
                 layout: Some(&render_pipeline_layout),
