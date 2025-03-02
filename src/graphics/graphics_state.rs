@@ -78,7 +78,8 @@ impl GraphicsState {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Care render device"),
-                    required_features: wgpu::Features::default(),
+                    required_features: wgpu::Features::default()
+                        | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     required_limits: wgpu::Limits::downlevel_defaults(),
                     memory_hints: wgpu::MemoryHints::default(),
                 },
@@ -185,6 +186,9 @@ impl GraphicsState {
                     bind_group_layouts: &[&textures_bind_group_layout],
                     push_constant_ranges: &[],
                 });
+            // TODO: uhhh this is sometimes BGRA on some computers I have... I probably
+            // should find a function that gives me the colour space of the surface
+            let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("2D Render Pipeline"),
                 layout: Some(&render_pipeline_layout),
@@ -199,9 +203,7 @@ impl GraphicsState {
                     entry_point: Some("fs_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        // TODO: uhhh this is sometimes BGRA on some computers I have... I probably
-                        // should find a function that gives me the colour space of the surface
-                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        format: surface_format,
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

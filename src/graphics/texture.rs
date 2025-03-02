@@ -1,6 +1,6 @@
 use std::{fmt::Debug, io::Cursor, path::Path, sync::Arc};
 
-use image::{DynamicImage, EncodableLayout, ImageFormat, ImageReader};
+use image::{DynamicImage, EncodableLayout, ImageFormat, ImageReader, RgbaImage};
 
 use crate::math::{Vec2, Vec4};
 
@@ -138,6 +138,11 @@ impl Texture {
                 depth_or_array_layers: 1,
             },
         );
+    }
+    /// Upload an image to a specific region of the image
+    pub fn upload_image_region(&self, image: RgbaImage, x: u32, y: u32) {
+        let (width, height) = (image.width(), image.height());
+        self.upload_region(image.as_bytes(), x, y, width, height);
     }
     /// Get the size of the texture
     pub fn size(&self) -> Vec2 {

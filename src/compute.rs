@@ -46,6 +46,13 @@ pub fn init_bind<B: wrgpgpu::bindings::Bind>(data: B::Data) -> B {
     B::new_init(device, data)
 }
 
+/// Download a binding
+pub fn download<B: wrgpgpu::bindings::Bind>(bind: &B) -> B::Data {
+    let device = COMPUTE_DEVICE.get_or_init(new_compute_device);
+
+    bind.download(device)
+}
+
 /// Create a bind group for use in a shader
 pub fn bind<B: wrgpgpu::bindings::BindGroupData>(data: &B) -> wrgpgpu::BindGroup<B> {
     let device = COMPUTE_DEVICE.get_or_init(new_compute_device);
