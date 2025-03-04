@@ -7,7 +7,7 @@ use super::GRAPHICS_STATE;
 pub struct Font(pub(crate) Arc<(rusttype::Font<'static>, u32)>);
 
 fn next_font_id() -> u32 {
-    let mut render = GRAPHICS_STATE.get().unwrap().care_render.write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     let id = render.next_font_id;
     render.next_font_id += 1;
     id

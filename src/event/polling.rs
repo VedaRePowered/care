@@ -21,7 +21,7 @@ pub fn async_executor(mut fut: impl Future<Output = ()> + 'static, call_end_fram
         |_| {},
     );
     const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
-    main_loop_manual(move || {
+    main_loop_manual(super::init, move |()| {
         let _ = pin!(&mut async move { fut })
             .poll(&mut Context::from_waker(&unsafe { Waker::from_raw(RAW) }));
         if call_end_frame {

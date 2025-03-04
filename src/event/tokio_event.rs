@@ -19,7 +19,7 @@ pub fn async_executor(fut: impl Future<Output = ()> + 'static + Send, call_end_f
         .build()
         .unwrap();
     rt.spawn(fut);
-    main_loop_manual(move || {
+    main_loop_manual(super::init, move |()| {
         let mut wakers = Vec::new();
         while FRAME_READY
             .compare_exchange(

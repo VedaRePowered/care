@@ -17,9 +17,7 @@ static COMPUTE_DEVICE: OnceLock<wrgpgpu::Device> = OnceLock::new();
 fn new_compute_device() -> wrgpgpu::Device {
     #[cfg(feature = "graphics")]
     {
-        let state =
-            crate::graphics::GRAPHICS_STATE.get_or_init(crate::graphics::GraphicsState::new);
-        wrgpgpu::Device::from_wgpu(state.device.clone(), state.queue.clone())
+        wrgpgpu::Device::from_wgpu(crate::graphics::GRAPHICS_STATE.device.clone(), crate::graphics::GRAPHICS_STATE.queue.clone())
     }
     #[cfg(not(feature = "graphics"))]
     wrgpgpu::Device::auto_high_performance()

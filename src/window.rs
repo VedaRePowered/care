@@ -1,28 +1,33 @@
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Instant,
 };
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalPosition, LogicalSize},
     event::{KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key as WKey, NamedKey, SmolStr},
-    window::Window,
+    window::{Window, WindowAttributes},
 };
 
 use crate::{math::Vec2, prelude::Key};
 
 static HAS_INITIALIZED: AtomicBool = AtomicBool::new(false);
+static INIT_COMPLETE: AtomicBool = AtomicBool::new(false);
 thread_local! {
     static EVENT_LOOP: RwLock<Option<EventLoop<()>>> = const { RwLock::new(None) };
 }
-pub(crate) static WINDOWS: RwLock<Vec<Window>> = RwLock::new(Vec::new());
 
-/// Must be called before creating any windows
-pub fn init() {
+pub(crate) static CREATE_WINDOWS: Mutex<Vec<WindowAttributes>> = Mutex::new(Vec::new());
+pub(crate) static WINDOWS: RwLock<Vec<Arc<Window>>> = RwLock::new(Vec::new());
+
+fn init() {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     assert!(
         std::thread::current().name() == Some("main"),
@@ -32,6 +37,7 @@ pub fn init() {
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
     {
+        INIT_COMPLETE.store(false, Ordering::Release);
         EVENT_LOOP.with(|el_cell| {
             let mut el = el_cell.write();
             if el.is_none() {
@@ -39,7 +45,7 @@ pub fn init() {
                 tmp.set_control_flow(ControlFlow::Poll);
                 *el = Some(tmp);
             }
-        })
+        });
     }
 }
 
@@ -79,32 +85,17 @@ pub fn open(name: &str) {
 }
 
 /// Open a window with the specified window settings
-///
-/// # NOTE
-/// Can only be called from the main thread, calling on any other thread will panic.
 pub fn open_with_settings(settings: WindowSettings) {
-    // TODO: Be able to create windows in the main loop by adding windows to a queue and creating them in the main loop below
-    if !HAS_INITIALIZED.load(Ordering::Acquire) {
-        panic!("Attempted to open window before initializing the window library");
+    let mut attribs = Window::default_attributes()
+        .with_title(settings.name)
+        .with_resizable(settings.resizable);
+    if let Some(size) = settings.size {
+        attribs = attribs.with_inner_size(LogicalSize::new(size.0.x, size.0.y));
     }
-    EVENT_LOOP.with(|el_cell| {
-        let el_handle = el_cell.write();
-        let el = el_handle
-            .as_ref()
-            .expect("You must open windows from the main thread");
-        let mut attribs = Window::default_attributes()
-            .with_title(settings.name)
-            .with_resizable(settings.resizable);
-        if let Some(size) = settings.size {
-            attribs = attribs.with_inner_size(LogicalSize::new(size.0.x, size.0.y));
-        }
-        if let Some(pos) = settings.pos {
-            attribs = attribs.with_position(LogicalPosition::new(pos.0.x, pos.0.y));
-        }
-        WINDOWS
-            .write()
-            .push(el.create_window(attribs).expect("Failed to open window"));
-    });
+    if let Some(pos) = settings.pos {
+        attribs = attribs.with_position(LogicalPosition::new(pos.0.x, pos.0.y));
+    }
+    CREATE_WINDOWS.lock().push(attribs);
 }
 
 /// WIP Function to set the main window size
@@ -135,15 +126,34 @@ fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
     }
 }
 
-struct AppHandler<T: FnMut()> {
-    loop_fn: T,
+enum AppData<T, F: FnOnce() -> T> {
+    Init(Option<F>),
+    Data(T),
 }
 
-impl<T: FnMut()> ApplicationHandler for AppHandler<T> {
+struct AppHandler<T, F: FnMut(&mut T), I: FnOnce() -> T> {
+    data: AppData<T, I>,
+    loop_fn: F,
+}
+
+impl<T, F: FnMut(&mut T), I: FnOnce() -> T> ApplicationHandler for AppHandler<T, F, I> {
     fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
 
-    fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        (self.loop_fn)();
+    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        for attribs in CREATE_WINDOWS.lock().drain(..) {
+            WINDOWS.write().push(Arc::new(
+                    event_loop
+                    .create_window(attribs)
+                    .expect("Failed to open window"),
+            ));
+        }
+        if let AppData::Init(init) = &mut self.data {
+            self.data = AppData::Data((init.take().unwrap())());
+        };
+        let AppData::Data(data) = &mut self.data else {
+            panic!("Impossible");
+        };
+        (self.loop_fn)(data);
     }
 
     fn window_event(
@@ -213,13 +223,20 @@ impl<T: FnMut()> ApplicationHandler for AppHandler<T> {
     }
 }
 
-// Window implementation of the event loop running function
-pub(crate) fn run(loop_fn: impl FnMut()) {
+/// Window implementation of the event loop running function
+///
+/// Also initializes the window system
+pub(crate) fn run<T>(init_fn: impl FnOnce() -> T, loop_fn: impl FnMut(&mut T)) {
+    init();
     EVENT_LOOP.with(move |el_call| {
         let el = el_call
             .write()
             .take()
             .expect("Event loop must be run from the main thread");
-        el.run_app(&mut AppHandler { loop_fn }).unwrap();
+        el.run_app(&mut AppHandler {
+            data: AppData::Init(Some(init_fn)),
+            loop_fn,
+        })
+        .unwrap();
     });
 }

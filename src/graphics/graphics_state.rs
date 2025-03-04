@@ -1,16 +1,13 @@
 use std::{
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, OnceLock},
+    sync::{Arc, LazyLock, OnceLock},
 };
 
 use parking_lot::RwLock;
 use pollster::FutureExt;
 use rusttype::gpu_cache::Cache as FontCache;
-use wgpu::{
-    rwh::{HasRawDisplayHandle, HasRawWindowHandle},
-    Adapter, Buffer, Device, Instance, Queue, RenderPipeline, Surface,
-};
+use wgpu::{Adapter, Buffer, Device, Instance, Queue, RenderPipeline, Surface};
 use winit::window::WindowId;
 
 use crate::math::{Mat3, Vec4};
@@ -36,6 +33,7 @@ pub(crate) struct GraphicsState {
 
 impl GraphicsState {
     pub(crate) fn new() -> Self {
+        println!("New graphics state");
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -46,16 +44,15 @@ impl GraphicsState {
             .read()
             .iter()
             .map(|win| {
-                let target = wgpu::SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle: win.raw_display_handle().unwrap(),
-                    raw_window_handle: win.raw_window_handle().unwrap(),
-                };
+                let win = win.clone();
+                let size = (win.inner_size().width, win.inner_size().height);
                 (
                     win.id(),
                     RwLock::new((
-                        unsafe { instance.create_surface_unsafe(target) }
+                        instance
+                            .create_surface(win)
                             .expect("Failed to create surface for window."),
-                        (win.inner_size().width, win.inner_size().height),
+                        size,
                     )),
                 )
             })
@@ -252,4 +249,4 @@ impl GraphicsState {
     }
 }
 
-pub(crate) static GRAPHICS_STATE: OnceLock<GraphicsState> = OnceLock::new();
+pub(crate) static GRAPHICS_STATE: LazyLock<GraphicsState> = LazyLock::new(GraphicsState::new);

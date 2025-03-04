@@ -2,7 +2,6 @@ use std::{fmt::Display, time::Duration};
 
 use parking_lot::RwLock;
 use wgpu::{
-    rwh::{HasRawDisplayHandle, HasRawWindowHandle},
     Buffer, Device, Queue,
 };
 
@@ -12,13 +11,12 @@ use crate::{
 };
 
 use super::{
-    DrawCommand, DrawCommandData, GraphicsState, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE,
+    DrawCommand, DrawCommandData, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE,
 };
 
 /// Initialize the graphics library, must be called on the main thread!
 pub fn init() {
-    let state = GRAPHICS_STATE.get_or_init(GraphicsState::new);
-    state.placeholder_texture.get_or_init(|| {
+    GRAPHICS_STATE.placeholder_texture.get_or_init(|| {
         Texture::new_from_data(
             2,
             2,
@@ -27,7 +25,7 @@ pub fn init() {
             ],
         )
     });
-    state
+    GRAPHICS_STATE
         .care_render
         .read()
         .font_cache_texture
@@ -37,8 +35,6 @@ pub fn init() {
 /// Set the colour used for rendering
 pub fn set_colour(colour: impl Into<Vec4>) {
     GRAPHICS_STATE
-        .get()
-        .unwrap()
         .care_render
         .write()
         .current_colour = colour.into();
@@ -46,7 +42,7 @@ pub fn set_colour(colour: impl Into<Vec4>) {
 
 /// Set the colour used for rendering
 pub fn set_line_style(join_style: LineJoinStyle, end_style: LineEndStyle) {
-    let mut render = GRAPHICS_STATE.get().unwrap().care_render.write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     render.line_join_style = join_style;
     render.line_end_style = end_style;
 }
@@ -54,8 +50,6 @@ pub fn set_line_style(join_style: LineJoinStyle, end_style: LineEndStyle) {
 /// Render a line of text to the screen
 pub fn text(text: impl Display, pos: impl Into<Vec2>) {
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     let pos = pos.into()
@@ -156,8 +150,6 @@ pub fn texture_rounded(
 ) {
     // TODO: Function to get this:
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     // TODO: Function to do this:
@@ -196,8 +188,6 @@ pub fn rectangle_rounded(
     corner_radii: [impl IntoFl; 4],
 ) {
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     let command = DrawCommand {
@@ -216,8 +206,6 @@ pub fn rectangle_rounded(
 /// Render a triangle (in a solid colour)
 pub fn triangle(points: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>)) {
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     let command = DrawCommand {
@@ -238,8 +226,6 @@ pub fn triangle_textured(
     uvs: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>),
 ) {
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     let command = DrawCommand {
@@ -261,8 +247,6 @@ pub fn circle(center: impl Into<Vec2>, radius: impl IntoFl) {
 /// Render a circle
 pub fn ellipse(center: impl Into<Vec2>, radius: impl IntoFl, elipseness: impl Into<Vec2>) {
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     let command = DrawCommand {
@@ -286,8 +270,6 @@ pub fn line_segment(point1: impl Into<Vec2>, point2: impl Into<Vec2>, width: imp
 pub fn line(points: impl IntoIterator<Item = impl Into<Vec2>>, width: impl IntoFl) {
     let (line_join_style, line_end_style) = {
         let render = GRAPHICS_STATE
-            .get()
-            .expect("Graphics not initialized")
             .care_render
             .read();
         (render.line_join_style, render.line_end_style)
@@ -305,8 +287,6 @@ pub fn line_varying_styles(
     ends: (LineEndStyle, LineEndStyle),
 ) {
     let mut render = GRAPHICS_STATE
-        .get()
-        .expect("Graphics not initialized")
         .care_render
         .write();
     // Clippy detects this as an issue because when Fl = f32, the explicit conversions are not
@@ -345,16 +325,14 @@ fn upload_buffer(device: &Device, queue: &Queue, buffer_lock: &RwLock<Buffer>, d
 /// Present the current frame
 pub fn present() {
     // Lets try render some stuff oh boy!
-    let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
-
     // Update font cache
     {
-        let mut render = state.care_render.write();
+        let mut render = GRAPHICS_STATE.care_render.write();
         let texture = render.font_cache_texture.get().unwrap().clone();
         render
             .font_cache
             .cache_queued(|pos, data| {
-                state.queue.write_texture(
+                GRAPHICS_STATE.queue.write_texture(
                     wgpu::ImageCopyTexture {
                         texture: &texture.0.texture,
                         mip_level: 0,
@@ -384,8 +362,8 @@ pub fn present() {
             .unwrap();
     }
 
-    let output_key = state.window_surfaces.keys().next().unwrap();
-    let output = state.window_surfaces[output_key]
+    let output_key = GRAPHICS_STATE.window_surfaces.keys().next().unwrap();
+    let output = GRAPHICS_STATE.window_surfaces[output_key]
         .read()
         .0
         .get_current_texture();
@@ -394,20 +372,17 @@ pub fn present() {
     } else {
         // Output is outdated, request a new surface...
         let windows = crate::window::WINDOWS.read();
-        let win = windows.iter().find(|w| w.id() == *output_key).unwrap();
-        let mut output = state.window_surfaces[output_key].write();
-        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle: win.raw_display_handle().unwrap(),
-            raw_window_handle: win.raw_window_handle().unwrap(),
-        };
+        let win = windows.iter().find(|w| w.id() == *output_key).cloned().unwrap();
+        let size = (win.inner_size().width, win.inner_size().height);
+        let mut output = GRAPHICS_STATE.window_surfaces[output_key].write();
         *output = (
-            unsafe { state.instance.create_surface_unsafe(target) }
+            GRAPHICS_STATE.instance.create_surface(win)
                 .expect("Failed to create surface for window."),
-            (win.inner_size().width, win.inner_size().height),
+            size,
         );
 
         // Configure the new surface
-        let surface_caps = output.0.get_capabilities(&state.adapter);
+        let surface_caps = output.0.get_capabilities(&GRAPHICS_STATE.adapter);
         let surface_format = surface_caps
             .formats
             .iter()
@@ -424,7 +399,7 @@ pub fn present() {
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
-        output.0.configure(&state.device, &config);
+        output.0.configure(&GRAPHICS_STATE.device, &config);
 
         output.0.get_current_texture().unwrap()
     };
@@ -435,14 +410,14 @@ pub fn present() {
     let view = output
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = state
+    let mut encoder = GRAPHICS_STATE
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Present command encoder"),
         });
-    let max_textures = state.care_render.read().max_textures;
-    let draw_calls = state.care_render.write().render(screen_size);
-    let placeholder_tex = state.placeholder_texture.get().unwrap();
+    let max_textures = GRAPHICS_STATE.care_render.read().max_textures;
+    let draw_calls = GRAPHICS_STATE.care_render.write().render(screen_size);
+    let placeholder_tex = GRAPHICS_STATE.placeholder_texture.get().unwrap();
     let vertices: ForceAlign<Vec<Vertex2d>> = ForceAlign(
         draw_calls
             .iter()
@@ -458,19 +433,19 @@ pub fn present() {
             .collect(),
     );
     upload_buffer(
-        &state.device,
-        &state.queue,
-        &state.vertex_buffer_2d,
+        &GRAPHICS_STATE.device,
+        &GRAPHICS_STATE.queue,
+        &GRAPHICS_STATE.vertex_buffer_2d,
         bytemuck::cast_slice(&vertices.0),
     );
     upload_buffer(
-        &state.device,
-        &state.queue,
-        &state.index_buffer_2d,
+        &GRAPHICS_STATE.device,
+        &GRAPHICS_STATE.queue,
+        &GRAPHICS_STATE.index_buffer_2d,
         bytemuck::cast_slice(&indices.0),
     );
     if vertices.0.is_empty() || indices.0.is_empty() {
-        state.care_render.write().reset();
+        GRAPHICS_STATE.care_render.write().reset();
         return;
     }
     let mut vstart: wgpu::BufferAddress = 0;
@@ -486,9 +461,9 @@ pub fn present() {
             if vend == vstart || iend == istart {
                 return None;
             }
-            let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            let bind_group = GRAPHICS_STATE.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Temp Bind Group"),
-                layout: &state.bind_group_layout_2d,
+                layout: &GRAPHICS_STATE.bind_group_layout_2d,
                 entries: (0..max_textures)
                     .flat_map(|i| {
                         (if let Some(tex) = draw_call.textures.get(i) {
@@ -513,8 +488,8 @@ pub fn present() {
             Some(uwu)
         })
         .collect();
-    let vert = state.vertex_buffer_2d.read();
-    let idx = state.index_buffer_2d.read();
+    let vert = GRAPHICS_STATE.vertex_buffer_2d.read();
+    let idx = GRAPHICS_STATE.index_buffer_2d.read();
     {
         // Render pass time
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -537,7 +512,7 @@ pub fn present() {
             timestamp_writes: None,
         });
         for (vrange, irange, bind_group, indices_count) in draw_call_info {
-            render_pass.set_pipeline(&state.render_pipeline_2d);
+            render_pass.set_pipeline(&GRAPHICS_STATE.render_pipeline_2d);
             render_pass.set_bind_group(0, &bind_group, &[]);
             render_pass.set_vertex_buffer(0, vert.slice(vrange));
             render_pass.set_index_buffer(idx.slice(irange), wgpu::IndexFormat::Uint32);
@@ -545,11 +520,11 @@ pub fn present() {
         }
     }
 
-    state.queue.submit([encoder.finish()]);
+    GRAPHICS_STATE.queue.submit([encoder.finish()]);
     std::thread::sleep(Duration::from_millis(2));
     output.present();
 
-    state.care_render.write().reset();
+    GRAPHICS_STATE.care_render.write().reset();
 }
 
 #[repr(C, align(256))]

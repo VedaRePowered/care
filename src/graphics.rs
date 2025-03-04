@@ -16,7 +16,7 @@ pub use render_2d::{LineEndStyle, LineJoinStyle};
 #[doc(inline)]
 pub use texture::Texture;
 
-pub(crate) use graphics_state::{GraphicsState, GRAPHICS_STATE};
+pub(crate) use graphics_state::GRAPHICS_STATE;
 pub(crate) use render_2d::*;
 
 /// Useful default struct imports

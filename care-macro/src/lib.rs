@@ -4,7 +4,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{spanned::Spanned, Block, Expr, ItemFn, ItemStatic, Stmt};
 
-const STATE_VAR_SEPARATOR: &str = ",,,\n\n\n,,,";
+const STATE_VAR_SEPARATOR: &str = "\n\n\n";
 
 #[rustfmt::skip]
 fn dereference_state_vars(expr: &mut Expr, vars: &HashSet<String>) {
@@ -197,7 +197,7 @@ pub fn care_state(
             .ok()
             .unwrap_or_default()
             + STATE_VAR_SEPARATOR
-            + &quote! { &mut #ident_state }.to_string(),
+            + &quote! { #ident_state }.to_string(),
     );
     proc_macro::TokenStream::new()
 }
@@ -256,10 +256,6 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let additional_params: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
         .ok()
-        .map(|st| st.replace(STATE_VAR_SEPARATOR, ",").parse().unwrap())
-        .unwrap_or_default();
-    let additional_params_trim: TokenStream = std::env::var("_CARE_INTERNAL_STATE_ITEMS")
-        .ok()
         .map(|st| {
             st.trim_start_matches(STATE_VAR_SEPARATOR)
                 .replace(STATE_VAR_SEPARATOR, ",")
@@ -276,33 +272,33 @@ pub fn care_main(attr: proc_macro::TokenStream) -> proc_macro::TokenStream {
         return quote! {
             fn main() {
                 let config = { #conf };
-                ::care::event::init_all(env!("CARGO_CRATE_NAME"));
+                ::care::window::open(env!("CARGO_CRATE_NAME"));
                 #state_lets
-                ::care::event::main_async(#fn_ident(#additional_params_trim));
+                ::care::event::main_async(#fn_ident(#additional_params));
             }
         }
         .into();
     }
 
-    let init_call = maybe_call_function(init_fn, quote! {app_args #additional_params});
-    let update_call = maybe_call_function(update_fn, quote! {delta_time #additional_params});
-    let draw_call = maybe_call_function(draw_fn, quote! {#additional_params_trim});
+    let init_call = maybe_call_function(init_fn, quote! {app_args, #additional_params});
+    let update_call = maybe_call_function(update_fn, quote! {delta_time, #additional_params});
+    let draw_call = maybe_call_function(draw_fn, quote! {#additional_params});
 
     let result = quote! {
         fn main() {
             let config = { #conf };
-            ::care::event::init_all(env!("CARGO_CRATE_NAME"));
-            #state_lets
-            let app_args: Vec<_> = ::std::env::args().collect();
-            #init_call
-            let mut last_time = ::std::time::Instant::now();
+            ::care::window::open(env!("CARGO_CRATE_NAME"));
             ::care::event::main_loop(move || {
+                #state_lets
+                let app_args: Vec<_> = ::std::env::args().collect();
+                #init_call
+                (::std::time::Instant::now(), (#additional_params))
+            }, move |(last_time, (#additional_params))| {
                 let next_time = ::std::time::Instant::now();
-                let delta_time = next_time.duration_since(last_time).as_secs_f64() as ::care::math::Fl;
-                last_time = next_time;
+                let delta_time = next_time.duration_since(*last_time).as_secs_f64() as ::care::math::Fl;
+                *last_time = next_time;
                 #update_call
                 #draw_call
-                let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
             });
         }
     };

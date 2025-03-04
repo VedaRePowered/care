@@ -9,9 +9,7 @@ async fn secondary() {
 }
 
 fn main() {
-    care::window::init();
     care::window::open("uwu");
-    care::graphics::init();
     care::event::main_async_manual(Box::pin(async {
         care::event::spawn(secondary());
 
@@ -38,8 +36,6 @@ fn main() {
             care::mouse::reset();
 
             care::event::next_frame().await;
-
-            let _ = ::std::thread::sleep(::std::time::Duration::from_millis(1));
         }
     }));
 }

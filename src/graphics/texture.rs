@@ -49,13 +49,12 @@ impl Texture {
     }
     /// Create a new texture out of a size and raw data
     pub fn new_from_data(width: u32, height: u32, data: &[u8]) -> Self {
-        let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
         let size = wgpu::Extent3d {
             width,
             height,
             depth_or_array_layers: 1,
         };
-        let texture = state.device.create_texture(&wgpu::TextureDescriptor {
+        let texture = GRAPHICS_STATE.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size,
             mip_level_count: 1,
@@ -65,7 +64,7 @@ impl Texture {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        state.queue.write_texture(
+        GRAPHICS_STATE.queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &texture,
                 mip_level: 0,
@@ -81,7 +80,7 @@ impl Texture {
             size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = state.device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = GRAPHICS_STATE.device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -98,9 +97,8 @@ impl Texture {
         }))
     }
     pub(crate) fn new_from_wgpu(texture: Arc<wgpu::Texture>) -> Self {
-        let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = state.device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = GRAPHICS_STATE.device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -118,8 +116,7 @@ impl Texture {
     }
     /// Upload data to a specific region of the texture
     pub fn upload_region(&self, data: &[u8], x: u32, y: u32, width: u32, height: u32) {
-        let state = GRAPHICS_STATE.get().expect("Graphics not initialized");
-        state.queue.write_texture(
+        GRAPHICS_STATE.queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &self.0.texture,
                 mip_level: 0,

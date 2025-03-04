@@ -4,7 +4,7 @@ use crate::{
     graphics,
     keyboard::{self, Key},
     math::Vec2,
-    mouse, window,
+    mouse,
 };
 
 #[cfg(feature = "async-custom")]
@@ -50,12 +50,7 @@ pub struct Event {
 /// Initialize the care game engine, including all loaded modules
 ///
 /// This is normally called automatically
-pub fn init_all(window_name: &str) {
-    #[cfg(feature = "window")]
-    window::init();
-    #[cfg(feature = "window")]
-    window::open(window_name);
-    #[cfg(feature = "graphics")]
+pub fn init() {
     graphics::init();
 }
 
@@ -70,20 +65,26 @@ pub fn end_frame() {
 }
 
 /// Run the game main loop, using a specific function that gets called once per frame
-pub fn main_loop(mut loop_fn: impl FnMut() + 'static) {
+pub fn main_loop<T>(init_fn: impl FnOnce() -> T + 'static, mut loop_fn: impl FnMut(&mut T) + 'static) {
     main_loop_manual(move || {
-        loop_fn();
+        init();
+        init_fn()
+    }, move |data| {
+        loop_fn(data);
         end_frame();
     });
 }
 
 /// Like [main_loop], but you have to call [end_frame] stuff yourself
-pub fn main_loop_manual(loop_fn: impl FnMut() + 'static) {
+pub fn main_loop_manual<T>(init_fn: impl FnOnce() -> T + 'static, loop_fn: impl FnMut(&mut T) + 'static) {
     #[cfg(feature = "window")]
-    crate::window::run(loop_fn);
+    crate::window::run(init_fn, loop_fn);
     #[cfg(not(feature = "window"))]
-    loop {
-        loop_fn();
+    {
+        let mut data = init_fn();
+        loop {
+            loop_fn(&mut data);
+        }
     }
 }
 
