@@ -1,7 +1,15 @@
 [package]
 name = "care-macro"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
+
+description = "Support (macro) crate for care game engine. Simple and easy game framework inspired by LÖVE."
+homepage = "https://gitlab.101100.ca/veda/care"
+repository = "https://gitlab.101100.ca/veda/care.git"
+authors = ["Veda Heard <veda@vedapowered.ca>"]
+categories = ["game-development", "game-engines", "graphics", "asynchronous", "rendering::engine"]
+keywords = ["care", "game", "engine", "love", "2d"]
+license = "ISC"
 
 [lib]
 proc-macro = true

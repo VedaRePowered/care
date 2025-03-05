@@ -340,7 +340,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "care"
+name = "care-game"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
