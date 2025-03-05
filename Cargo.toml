@@ -1,10 +1,10 @@
 [package]
-name = "care"
+name = "care-game"
 version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-care-macro = { path = "care-macro" }
+care-macro = { version = "0.1", path = "care-macro" }
 
 bytemuck = { version = "1", features = ["derive"] }
 half = { version = "2", features = ["bytemuck"] }
