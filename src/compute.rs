@@ -77,7 +77,7 @@ pub fn is_complete() -> bool {
 }
 
 #[cfg(feature = "graphics")]
-/// Create a care texture, to be used in the [`crate::grapics`] module, from a compute texture binding
+/// Create a care texture, to be used in the [`crate::graphics`] module, from a compute texture binding
 ///
 /// These textures will share the same storage in gpu memory, and as such any modification to the
 /// texture from the compute shader will be observed in the graphics module when the texture is

@@ -101,9 +101,23 @@ pub fn open_with_settings(settings: WindowSettings) {
 /// WIP Function to set the main window size
 pub fn set_window_size(size: impl Into<Vec2>) {
     let size = size.into();
-    let mut windows = WINDOWS.write();
-    let window = windows.first_mut().unwrap();
+    let windows = WINDOWS.read();
+    let window = windows.first().unwrap();
     let _ = window.request_inner_size(LogicalSize::new(size.x(), size.y()));
+}
+
+/// Get the current window size in pixels
+///
+/// Currently the implementation reads from the list of windows, so the result should probably be
+/// cached per-frame, but in the future this function may be cached for speed
+pub fn window_size() -> Vec2 {
+    let windows = WINDOWS.read();
+    if let Some(window) = windows.first() {
+        let size: LogicalSize<f32> = window.inner_size().to_logical(window.scale_factor());
+        Vec2::new(size.width, size.height)
+    } else {
+        Vec2::new(0.0, 0.0)
+    }
 }
 
 fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
@@ -142,7 +156,7 @@ impl<T, F: FnMut(&mut T), I: FnOnce() -> T> ApplicationHandler for AppHandler<T,
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         for attribs in CREATE_WINDOWS.lock().drain(..) {
             WINDOWS.write().push(Arc::new(
-                    event_loop
+                event_loop
                     .create_window(attribs)
                     .expect("Failed to open window"),
             ));

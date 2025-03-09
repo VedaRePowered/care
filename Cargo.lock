@@ -328,7 +328,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "care-game"
+name = "care"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
@@ -340,6 +340,7 @@ dependencies = [
  "pollster",
  "rand",
  "rusttype",
+ "serde",
  "tokio",
  "wgpu",
  "winit",
@@ -1144,6 +1145,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
+ "serde",
  "simba",
  "typenum",
 ]

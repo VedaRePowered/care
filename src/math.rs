@@ -1,4 +1,4 @@
-use nalgebra::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
+use nalgebra::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4, Vector5};
 
 #[cfg(not(feature = "f64"))]
 /// Floating point type used by the library
@@ -42,27 +42,31 @@ impl_into_fl!(i128);
 impl_into_fl!(usize);
 impl_into_fl!(isize);
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-/// A vector of 2 floating point numbers
-pub struct Vec2(pub Vector2<Fl>);
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-/// A vector of 3 floating point numbers
-pub struct Vec3(pub Vector3<Fl>);
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-/// A vector of 4 floating point numbers
-pub struct Vec4(pub Vector4<Fl>);
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
 /// A 2x2 matrix of floating point numbers
+#[repr(transparent)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Mat2(pub Matrix2<Fl>);
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
 /// A 3x3 matrix of floating point numbers
-pub struct Mat3(pub Matrix3<Fl>);
+#[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Mat3(pub Matrix3<Fl>);
 /// A 4x4 matrix of floating point numbers
+#[repr(transparent)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Mat4(pub Matrix4<Fl>);
 
 macro_rules! impl_vec_n {
-    ( $vec:ident, $inner:ident; $( $name:ident: $ty_name:ident ),* ) => {
+    ( $vec:ident[$len:expr], $inner:ident, $serde:ident=$serde_str:expr; $( $name:ident: $ty_name:ident ),* ) => {
+        #[doc = concat!("A ", stringify!($len), "-dimensional vector of floating point numbers")]
+        #[repr(transparent)]
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+        #[cfg_attr(
+            feature = "serde",
+            derive(::serde::Deserialize, ::serde::Serialize),
+            serde(from = $serde_str, into = $serde_str)
+        )]
+        pub struct $vec(pub $inner<Fl>);
+
         impl $vec {
             #[inline(always)]
             /// Create a vector from a set of numbers
@@ -71,17 +75,45 @@ macro_rules! impl_vec_n {
             }
             $(
                 #[inline(always)]
-                /// Access a component of this vector
+                #[doc = concat!("Access the ", stringify!($name), " component of this vector")]
                 pub fn $name(&self) -> Fl {
                     self.0.$name
                 }
             )*
         }
         impl<$($ty_name: IntoFl,)*> From<($($ty_name,)*)> for $vec {
-            #[inline(always)]
             /// Convert from a tuple of numbers to a vector
+            #[inline(always)]
             fn from(($($name,)*): ($($ty_name,)*)) -> Self {
                 Self::new($($name,)*)
+            }
+        }
+        impl From<$inner<Fl>> for $vec {
+            /// Convert from an nalgebra vector
+            #[inline(always)]
+            fn from(inner: $inner<Fl>) -> Self {
+                Self(inner)
+            }
+        }
+        impl From<$vec> for $inner<Fl> {
+            /// Convert from a care vector to an nalgebra vector
+            #[inline(always)]
+            fn from(vec: $vec) -> Self {
+                vec.0
+            }
+        }
+        impl std::ops::Deref for $vec {
+            type Target = $inner<Fl>;
+
+            #[inline(always)]
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+        impl std::ops::DerefMut for $vec {
+            #[inline(always)]
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
             }
         }
 
@@ -144,12 +176,44 @@ macro_rules! impl_vec_n {
                 Self(self.0 / rhs)
             }
         }
+
+        #[cfg(feature = "serde")]
+        #[doc(hidden)]
+        #[derive(Debug, ::serde::Deserialize, ::serde::Serialize)]
+        struct $serde {
+            $(
+                $name: Fl,
+            )*
+        }
+
+        #[cfg(feature = "serde")]
+        impl From<$vec> for $serde {
+            fn from(vec: $vec) -> Self {
+                Self {
+                    $(
+                        $name: vec.$name,
+                    )*
+                }
+            }
+        }
+
+        #[cfg(feature = "serde")]
+        impl From<$serde> for $vec {
+            fn from(vec: $serde) -> Self {
+                Self::new(
+                    $(
+                        vec.$name,
+                    )*
+                )
+            }
+        }
     };
 }
 
-impl_vec_n!(Vec2, Vector2; x: T, y: U);
-impl_vec_n!(Vec3, Vector3; x: T, y: U, z: V);
-impl_vec_n!(Vec4, Vector4; x: T, y: U, z: V, w: W);
+impl_vec_n!(Vec2[2], Vector2, SerdeVec2="SerdeVec2"; x: T, y: U);
+impl_vec_n!(Vec3[2], Vector3, SerdeVec3="SerdeVec3"; x: T, y: U, z: V);
+impl_vec_n!(Vec4[2], Vector4, SerdeVec4="SerdeVec4"; x: T, y: U, z: V, w: W);
+impl_vec_n!(Vec5[2], Vector5, SerdeVec5="SerdeVec5"; x: T, y: U, z: V, w: W, a: S);
 
 impl Mat4 {
     /// 4x4 identity matrix
