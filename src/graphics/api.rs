@@ -1,18 +1,14 @@
-use std::{fmt::Display, time::Duration};
+use std::{fmt::Display, iter, time::Duration};
 
 use parking_lot::RwLock;
-use wgpu::{
-    Buffer, Device, Queue,
-};
+use wgpu::{Buffer, Device, Queue};
 
 use crate::{
     graphics::LineJoinStyle,
     math::{IntoFl, Vec2, Vec4},
 };
 
-use super::{
-    DrawCommand, DrawCommandData, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE,
-};
+use super::{DrawCommand, DrawCommandData, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE};
 
 /// Initialize the graphics library, must be called on the main thread!
 pub fn init() {
@@ -34,10 +30,7 @@ pub fn init() {
 
 /// Set the colour used for rendering
 pub fn set_colour(colour: impl Into<Vec4>) {
-    GRAPHICS_STATE
-        .care_render
-        .write()
-        .current_colour = colour.into();
+    GRAPHICS_STATE.care_render.write().current_colour = colour.into();
 }
 
 /// Set the colour used for rendering
@@ -49,9 +42,7 @@ pub fn set_line_style(join_style: LineJoinStyle, end_style: LineEndStyle) {
 
 /// Render a line of text to the screen
 pub fn text(text: impl Display, pos: impl Into<Vec2>) {
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     let pos = pos.into()
         + Vec2::new(
             0.0,
@@ -149,9 +140,7 @@ pub fn texture_rounded(
     corner_radii: [impl IntoFl; 4],
 ) {
     // TODO: Function to get this:
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     // TODO: Function to do this:
     let command = DrawCommand {
         transform: render.current_transform.clone(),
@@ -187,9 +176,7 @@ pub fn rectangle_rounded(
     rotation: impl IntoFl,
     corner_radii: [impl IntoFl; 4],
 ) {
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     let command = DrawCommand {
         transform: render.current_transform.clone(),
         colour: render.current_colour,
@@ -203,11 +190,28 @@ pub fn rectangle_rounded(
     render.commands.push(command);
 }
 
+#[inline(always)]
+/// Render an outline of a rectangle
+pub fn rectangle_line(pos: impl Into<Vec2>, size: impl Into<Vec2>, width: impl IntoFl) {
+    rectangle_line_rot(pos.into(), size.into(), width.into_fl(), 0.0)
+}
+
+#[inline(always)]
+/// Render an outline of a rectangle, with a rotation
+pub fn rectangle_line_rot(pos: impl Into<Vec2>, size: impl Into<Vec2>, width: impl IntoFl, rotation: impl IntoFl) {
+    let pos = pos.into();
+    let size = size.into();
+    polyline([
+        pos,
+        pos+Vec2::new(size.x, 0),
+        pos+size,
+        pos+Vec2::new(0, size.y),
+    ], width.into_fl())
+}
+
 /// Render a triangle (in a solid colour)
 pub fn triangle(points: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>)) {
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     let command = DrawCommand {
         transform: render.current_transform.clone(),
         colour: render.current_colour,
@@ -225,9 +229,7 @@ pub fn triangle_textured(
     tex: &Texture,
     uvs: (impl Into<Vec2>, impl Into<Vec2>, impl Into<Vec2>),
 ) {
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     let command = DrawCommand {
         transform: render.current_transform.clone(),
         colour: render.current_colour,
@@ -246,9 +248,7 @@ pub fn circle(center: impl Into<Vec2>, radius: impl IntoFl) {
 
 /// Render a circle
 pub fn ellipse(center: impl Into<Vec2>, radius: impl IntoFl, elipseness: impl Into<Vec2>) {
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     let command = DrawCommand {
         transform: render.current_transform.clone(),
         colour: render.current_colour,
@@ -269,9 +269,7 @@ pub fn line_segment(point1: impl Into<Vec2>, point2: impl Into<Vec2>, width: imp
 /// Draw a line with consistant width and line join style
 pub fn line(points: impl IntoIterator<Item = impl Into<Vec2>>, width: impl IntoFl) {
     let (line_join_style, line_end_style) = {
-        let render = GRAPHICS_STATE
-            .care_render
-            .read();
+        let render = GRAPHICS_STATE.care_render.read();
         (render.line_join_style, render.line_end_style)
     };
     let width = width.into_fl();
@@ -286,9 +284,7 @@ pub fn line_varying_styles(
     points: impl IntoIterator<Item = (impl Into<Vec2>, impl IntoFl, LineJoinStyle)>,
     ends: (LineEndStyle, LineEndStyle),
 ) {
-    let mut render = GRAPHICS_STATE
-        .care_render
-        .write();
+    let mut render = GRAPHICS_STATE.care_render.write();
     // Clippy detects this as an issue because when Fl = f32, the explicit conversions are not
     // needed, but when Fl = f64, they are neccesary.
     #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
@@ -301,6 +297,38 @@ pub fn line_varying_styles(
                 .map(|(p, w, j)| (p.into(), w.into_fl() as f32, j.into()))
                 .collect(),
             ends,
+        },
+    };
+    render.commands.push(command);
+}
+
+/// Draw a line with consistant width and line join style
+pub fn polyline(points: impl IntoIterator<Item = impl Into<Vec2>>, width: impl IntoFl) {
+    let mut render = GRAPHICS_STATE.care_render.write();
+    // Clippy detects this as an issue because when Fl = f32, the explicit conversions are not
+    // needed, but when Fl = f64, they are neccesary.
+    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
+    let width = width.into_fl() as f32;
+    let mut points = points.into_iter().map(|v| v.into());
+    let start_points = [
+        points.next().unwrap_or(Vec2::new(0, 0)),
+        points.next().unwrap_or(Vec2::new(0, 0)),
+    ];
+    let extra_points = [
+        start_points[0],
+        start_points[0] + (start_points[1] - start_points[0]) / 256.0,
+    ];
+    let command = DrawCommand {
+        transform: render.current_transform.clone(),
+        colour: render.current_colour,
+        data: DrawCommandData::Line {
+            points: start_points
+                .into_iter()
+                .chain(points)
+                .chain(extra_points)
+                .map(|p| (p.into(), width, render.line_join_style))
+                .collect(),
+            ends: (LineEndStyle::Flat, LineEndStyle::Flat),
         },
     };
     render.commands.push(command);
@@ -372,11 +400,17 @@ pub fn present() {
     } else {
         // Output is outdated, request a new surface...
         let windows = crate::window::WINDOWS.read();
-        let win = windows.iter().find(|w| w.id() == *output_key).cloned().unwrap();
+        let win = windows
+            .iter()
+            .find(|w| w.id() == *output_key)
+            .cloned()
+            .unwrap();
         let size = (win.inner_size().width, win.inner_size().height);
         let mut output = GRAPHICS_STATE.window_surfaces[output_key].write();
         *output = (
-            GRAPHICS_STATE.instance.create_surface(win)
+            GRAPHICS_STATE
+                .instance
+                .create_surface(win)
                 .expect("Failed to create surface for window."),
             size,
         );
@@ -410,11 +444,12 @@ pub fn present() {
     let view = output
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = GRAPHICS_STATE
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Present command encoder"),
-        });
+    let mut encoder =
+        GRAPHICS_STATE
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Present command encoder"),
+            });
     let max_textures = GRAPHICS_STATE.care_render.read().max_textures;
     let draw_calls = GRAPHICS_STATE.care_render.write().render(screen_size);
     let placeholder_tex = GRAPHICS_STATE.placeholder_texture.get().unwrap();
@@ -461,22 +496,24 @@ pub fn present() {
             if vend == vstart || iend == istart {
                 return None;
             }
-            let bind_group = GRAPHICS_STATE.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Temp Bind Group"),
-                layout: &GRAPHICS_STATE.bind_group_layout_2d,
-                entries: (0..max_textures)
-                    .flat_map(|i| {
-                        (if let Some(tex) = draw_call.textures.get(i) {
-                            tex
-                        } else {
-                            placeholder_tex
+            let bind_group = GRAPHICS_STATE
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("Temp Bind Group"),
+                    layout: &GRAPHICS_STATE.bind_group_layout_2d,
+                    entries: (0..max_textures)
+                        .flat_map(|i| {
+                            (if let Some(tex) = draw_call.textures.get(i) {
+                                tex
+                            } else {
+                                placeholder_tex
+                            })
+                            .0
+                            .bind_group_entries(i as u32)
                         })
-                        .0
-                        .bind_group_entries(i as u32)
-                    })
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            });
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                });
             let uwu = (
                 vstart..vend,
                 istart..iend,

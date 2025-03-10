@@ -33,7 +33,6 @@ pub(crate) struct GraphicsState {
 
 impl GraphicsState {
     pub(crate) fn new() -> Self {
-        println!("New graphics state");
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
