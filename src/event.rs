@@ -145,6 +145,12 @@ pub fn spawn(task: impl Future<Output = ()> + 'static + Send) {
     return tokio_event::spawn(task);
 }
 
+/// Exit the game
+pub fn exit() {
+    #[cfg(feature = "window")]
+    crate::window::exit();
+}
+
 /// Process an event, this can only send events within the game, not emulate actual mouse motion or
 /// keyboard buttons
 pub fn handle_event(ev: Event) {
@@ -156,3 +162,4 @@ pub fn handle_event(ev: Event) {
         }
     }
 }
+

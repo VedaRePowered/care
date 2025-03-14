@@ -300,6 +300,10 @@ impl Vec2 {
             *self / self.length()
         }
     }
+    /// Normalize this vector, or return zero for a zero vector
+    pub fn normalize(&self) -> Self {
+        self.normalize_or(*self)
+    }
 }
 
 impl std::ops::Mul<Vec2> for &Mat2 {

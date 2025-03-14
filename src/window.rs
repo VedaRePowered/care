@@ -23,6 +23,7 @@ static INIT_COMPLETE: AtomicBool = AtomicBool::new(false);
 thread_local! {
     static EVENT_LOOP: RwLock<Option<EventLoop<()>>> = const { RwLock::new(None) };
 }
+static EXIT_REQUEST: AtomicBool = AtomicBool::new(false);
 
 pub(crate) static CREATE_WINDOWS: Mutex<Vec<WindowAttributes>> = Mutex::new(Vec::new());
 pub(crate) static WINDOWS: RwLock<Vec<Arc<Window>>> = RwLock::new(Vec::new());
@@ -135,7 +136,7 @@ fn convert_key(key: winit::keyboard::Key<SmolStr>) -> Key {
         WKey::Named(NamedKey::Control) => Key::Control,
         WKey::Named(NamedKey::Alt) => Key::Alt,
         WKey::Named(NamedKey::Meta) => Key::Meta,
-        WKey::Character(ch) => Key::Char(ch.chars().next().unwrap()),
+        WKey::Character(ch) => ch.as_str().into(),
         _ => Key::Unknown,
     }
 }
@@ -176,6 +177,10 @@ impl<T, F: FnMut(&mut T), I: FnOnce() -> T> ApplicationHandler for AppHandler<T,
         window_id: winit::window::WindowId,
         ev: WindowEvent,
     ) {
+        if EXIT_REQUEST.load(Ordering::Relaxed) {
+            event_loop.exit();
+            return;
+        }
         match ev {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -253,4 +258,12 @@ pub(crate) fn run<T>(init_fn: impl FnOnce() -> T, loop_fn: impl FnMut(&mut T)) {
         })
         .unwrap();
     });
+}
+
+/// Close all windows and exit the main loop
+pub(crate) fn exit() {
+    // Close (drop) all windows
+    WINDOWS.write().drain(..);
+    // Exit event loop
+    EXIT_REQUEST.store(true, Ordering::Relaxed);
 }
