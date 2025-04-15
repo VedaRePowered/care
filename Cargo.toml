@@ -23,17 +23,20 @@ pollster = { version = "0.3", optional = true }
 rand = "0.8"
 rusttype = { version = "0.9", features = ["gpu_cache"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-wgpu = { version = "23", optional = true }
+wgpu = { version = "24", optional = true }
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"], optional = true }
 wrgpgpu = { version = "0.1", git = "https://gitlab.101100.ca/veda/wrgpgpu", optional = true }
 
 tokio = { version = "1", optional = true }
 
+egui = { version = "0.31", optional = true }
+egui-wgpu = { version = "0.31", features = ["winit", "x11", "wayland"], optional = true }
+
 [dev-dependencies]
 rand = "0.8"
 
 [features]
-default = ["graphics", "window", "compute", "async-tokio", "serde"]
+default = ["graphics", "window", "compute", "async-tokio", "serde", "gui"]
 # Use 64 bit floats instead of 32 bit floats everywhere
 f64 = []
 
@@ -45,9 +48,12 @@ async-custom = []
 async-tokio = ["dep:tokio", "tokio/rt-multi-thread", "_async-tokio-internal"]
 async-tokio-single-thread = ["dep:tokio", "tokio/rt", "_async-tokio-internal"]
 
+
 _async-tokio-internal = []
 
 serde = ["dep:serde", "nalgebra/serde"]
+
+gui = ["dep:egui", "dep:egui-wgpu"]
 
 [workspace]
 members = [

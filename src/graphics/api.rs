@@ -201,11 +201,12 @@ pub fn rectangle_line(pos: impl Into<Vec2>, size: impl Into<Vec2>, width: impl I
 pub fn rectangle_line_rot(pos: impl Into<Vec2>, size: impl Into<Vec2>, width: impl IntoFl, rotation: impl IntoFl) {
     let pos = pos.into();
     let size = size.into();
+    let rot = rotation.into_fl();
     polyline([
         pos,
-        pos+Vec2::new(size.x, 0),
-        pos+size,
-        pos+Vec2::new(0, size.y),
+        pos+Vec2::new(size.x, 0).rotated(rot),
+        pos+size.rotated(rot),
+        pos+Vec2::new(0, size.y).rotated(rot),
     ], width.into_fl())
 }
 
@@ -326,7 +327,7 @@ pub fn polyline(points: impl IntoIterator<Item = impl Into<Vec2>>, width: impl I
                 .into_iter()
                 .chain(points)
                 .chain(extra_points)
-                .map(|p| (p.into(), width, render.line_join_style))
+                .map(|p| (p, width, render.line_join_style))
                 .collect(),
             ends: (LineEndStyle::Flat, LineEndStyle::Flat),
         },
@@ -361,7 +362,7 @@ pub fn present() {
             .font_cache
             .cache_queued(|pos, data| {
                 GRAPHICS_STATE.queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture.0.texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d {
@@ -375,7 +376,7 @@ pub fn present() {
                         .flat_map(|&n| [255, 255, 255, n])
                         .collect::<Vec<_>>()
                         .as_slice(),
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some((pos.max.x - pos.min.x) * 4),
                         rows_per_image: Some(pos.max.y - pos.min.y),
