@@ -58,10 +58,10 @@ pub(crate) fn process_event(event: CareEvent) {
             Event::PointerButton {
                 pos: Pos2::new(pos.x, pos.y),
                 button: match button {
-                    0 => PointerButton::Primary,
-                    1 => PointerButton::Secondary,
-                    2 => PointerButton::Middle,
-                    3 => PointerButton::Extra1,
+                    1 => PointerButton::Primary,
+                    2 => PointerButton::Secondary,
+                    3 => PointerButton::Middle,
+                    4 => PointerButton::Extra1,
                     _ => PointerButton::Extra2,
                 },
                 pressed,
