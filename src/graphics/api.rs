@@ -463,7 +463,9 @@ pub fn present() {
     let mut command_buffers = Vec::new();
     // Render egui
     #[cfg(feature = "gui")]
-    {
+    let mut egui_rend = GRAPHICS_STATE.egui.egui_renderer.lock();
+    #[cfg(feature = "gui")]
+    let (textures_delta, clipped_primitives, egui_screen_descriptor) = {
         let full_output = GRAPHICS_STATE.egui.egui_ctx.run(
             egui::RawInput {
                 viewport_id: egui::ViewportId::ROOT,
@@ -506,8 +508,7 @@ pub fn present() {
             size_in_pixels: [output.texture.size().width, output.texture.size().height],
             pixels_per_point: 1.0,
         };
-        let mut rend = GRAPHICS_STATE.egui.egui_renderer.lock();
-        let mut egui_command_buffers = rend.update_buffers(
+        let mut egui_command_buffers = egui_rend.update_buffers(
             &GRAPHICS_STATE.device,
             &GRAPHICS_STATE.queue,
             &mut encoder,
@@ -516,9 +517,10 @@ pub fn present() {
         );
         command_buffers.append(&mut egui_command_buffers);
         for (tex, delta) in &full_output.textures_delta.set {
-            rend.update_texture(&GRAPHICS_STATE.device, &GRAPHICS_STATE.queue, *tex, delta);
+            egui_rend.update_texture(&GRAPHICS_STATE.device, &GRAPHICS_STATE.queue, *tex, delta);
         }
-    }
+        (full_output.textures_delta, clipped_primitives, egui_screen_descriptor)
+    };
 
     // Render our stuff
     let max_textures = GRAPHICS_STATE.care_render.read().max_textures;
@@ -598,8 +600,8 @@ pub fn present() {
         .collect();
     let vert = GRAPHICS_STATE.vertex_buffer_2d.read();
     let idx = GRAPHICS_STATE.index_buffer_2d.read();
+    // Render pass time
     {
-        // Render pass time
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("2D Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -626,6 +628,35 @@ pub fn present() {
             render_pass.set_index_buffer(idx.slice(irange), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..indices_count as u32, 0, 0..1);
         }
+    }
+    // Egui render pass
+    #[cfg(feature = "gui")]
+    {
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("EGUI Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        // This is fine maybe? idk it's needed for egui
+        let mut render_pass = render_pass.forget_lifetime();
+        egui_rend.render(
+            &mut render_pass,
+            &clipped_primitives,
+            &egui_screen_descriptor,
+        );
+    }
+    #[cfg(feature = "gui")]
+    for id in &textures_delta.free {
+        egui_rend.free_texture(id);
     }
 
     command_buffers.push(encoder.finish());

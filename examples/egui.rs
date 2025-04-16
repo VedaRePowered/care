@@ -20,8 +20,10 @@ async fn main() {
             pos.0.y -= 1.0;
         }
 
-        care::gui::window("Test Gui", |ctx, ui| {
-            ui.button("Reset");
+        care::gui::window("Test Gui", |_ctx, ui| {
+            if ui.button("Reset").clicked() {
+                //pos = Vec2::new(100, 100);
+            }
         });
 
         care::event::next_frame().await;
