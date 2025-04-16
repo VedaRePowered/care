@@ -4,8 +4,7 @@ use parking_lot::RwLock;
 use wgpu::{Buffer, Device, Queue};
 
 use crate::{
-    graphics::LineJoinStyle,
-    math::{IntoFl, Vec2, Vec4},
+    graphics::LineJoinStyle, math::{IntoFl, Vec2, Vec4}
 };
 
 use super::{DrawCommand, DrawCommandData, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE};
@@ -463,43 +462,9 @@ pub fn present() {
     let mut command_buffers = Vec::new();
     // Render egui
     #[cfg(feature = "gui")]
-    let mut egui_rend = GRAPHICS_STATE.egui.egui_renderer.lock();
-    #[cfg(feature = "gui")]
-    let (textures_delta, clipped_primitives, egui_screen_descriptor) = {
-        let full_output = GRAPHICS_STATE.egui.egui_ctx.run(
-            egui::RawInput {
-                viewport_id: egui::ViewportId::ROOT,
-                viewports: [(egui::ViewportId::ROOT, egui::ViewportInfo::default())]
-                    .into_iter()
-                    .collect(),
-                screen_rect: Some(egui::Rect::from_min_max(
-                    egui::Pos2::ZERO,
-                    egui::Pos2::new(
-                        output.texture.size().width as f32,
-                        output.texture.size().height as f32,
-                    ),
-                )),
-                max_texture_side: None,
-                time: Some(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs_f64(),
-                ),
-                predicted_dt: 1.0 / 60.0,
-                modifiers: crate::gui::get_modifiers(),
-                events: crate::gui::get_events(),
-                hovered_files: Vec::new(),
-                dropped_files: Vec::new(),
-                focused: true,
-                system_theme: None,
-            },
-            |ctx| {
-                for call in crate::gui::get_calls() {
-                    (call)(ctx);
-                }
-            },
-        );
+    let egui_data = {
+        let mut egui_rend = GRAPHICS_STATE.egui.egui_renderer.lock();
+        if let Some(full_output) = crate::gui::get_full_output() {
         let clipped_primitives = GRAPHICS_STATE
             .egui
             .egui_ctx
@@ -519,7 +484,10 @@ pub fn present() {
         for (tex, delta) in &full_output.textures_delta.set {
             egui_rend.update_texture(&GRAPHICS_STATE.device, &GRAPHICS_STATE.queue, *tex, delta);
         }
-        (full_output.textures_delta, clipped_primitives, egui_screen_descriptor)
+            Some((full_output.textures_delta, clipped_primitives, egui_screen_descriptor, egui_rend))
+        } else {
+            None
+        }
     };
 
     // Render our stuff
@@ -631,32 +599,33 @@ pub fn present() {
     }
     // Egui render pass
     #[cfg(feature = "gui")]
-    {
-        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("EGUI Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-        // This is fine maybe? idk it's needed for egui
-        let mut render_pass = render_pass.forget_lifetime();
-        egui_rend.render(
-            &mut render_pass,
-            &clipped_primitives,
-            &egui_screen_descriptor,
-        );
-    }
-    #[cfg(feature = "gui")]
-    for id in &textures_delta.free {
-        egui_rend.free_texture(id);
+    if let Some((textures_delta, clipped_primitives, egui_screen_descriptor, mut egui_rend)) = egui_data {
+        {
+            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("EGUI Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            // This is fine maybe? idk it's needed for egui
+            let mut render_pass = render_pass.forget_lifetime();
+            egui_rend.render(
+                &mut render_pass,
+                &clipped_primitives,
+                &egui_screen_descriptor,
+            );
+        }
+        for id in &textures_delta.free {
+            egui_rend.free_texture(id);
+        }
     }
 
     command_buffers.push(encoder.finish());

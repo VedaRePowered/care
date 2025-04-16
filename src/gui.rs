@@ -6,6 +6,7 @@ pub use egui::*;
 
 use crate::event::{Event as CareEvent, EventData as CareEventData};
 use crate::keyboard::{self, Key as CareKey};
+use crate::window::window_size;
 
 pub(crate) struct EguiGraphics {
     pub egui_ctx: egui::Context,
@@ -24,9 +25,9 @@ type EguiCall = Box<dyn FnOnce(&egui::Context) + Send + Sync>;
 
 #[derive(Default)]
 pub(crate) struct EguiState {
-    pub egui_calls: Vec<EguiCall>,
     pub egui_events: Vec<Event>,
     pub egui_mods: Modifiers,
+    pub full_output: Option<FullOutput>,
 }
 
 impl std::fmt::Debug for EguiState {
@@ -72,8 +73,8 @@ pub(crate) fn process_event(event: CareEvent) {
     EGUI_STATE.lock().egui_events.push(event);
 }
 
-pub(crate) fn get_calls() -> Vec<EguiCall> {
-    std::mem::take(&mut EGUI_STATE.lock().egui_calls)
+pub(crate) fn get_full_output() -> Option<FullOutput> {
+    std::mem::take(&mut EGUI_STATE.lock().full_output)
 }
 
 pub(crate) fn get_modifiers() -> Modifiers {
@@ -90,133 +91,41 @@ pub(crate) fn get_events() -> Vec<Event> {
     std::mem::take(&mut EGUI_STATE.lock().egui_events)
 }
 
-/// Render some gui elements this frame
+/// Render the gui with egui
 ///
-/// Actually, this gives you an Egui [Context] that you can use to render widgets
-pub fn gui(call: Box<dyn FnOnce(&egui::Context) + Send + Sync>) {
-    EGUI_STATE.lock().egui_calls.push(call);
-}
-
-/// A panel that covers the entire left side of the window.
+/// **IMPORTANT**: Only call this function once per frame
 ///
-/// The order in which you add panels matter! The first panel you add will always be the outermost, and the last you add will always be the innermost.
-///
-/// ⚠ Always add any CentralPanel last.
-///
-/// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
-///
-/// See also: [SidePanel]
-pub fn left_panel(
-    id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync + 'static,
-) {
-    let id = id.into();
-    gui(Box::new(move |ctx| {
-        egui::SidePanel::left(id).show(ctx, |ui| {
-            call(ctx, ui);
-        });
-    }))
-}
-
-/// A panel that covers the entire right side of the window.
-///
-/// The order in which you add panels matter! The first panel you add will always be the outermost, and the last you add will always be the innermost.
-///
-/// ⚠ Always add any CentralPanel last.
-///
-/// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
-///
-/// See also: [SidePanel]
-pub fn right_panel(
-    id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
-) {
-    let id = id.into();
-    gui(Box::new(move |ctx| {
-        egui::SidePanel::right(id).show(ctx, |ui| {
-            call(ctx, ui);
-        });
-    }))
-}
-
-/// A panel that covers the entire top of the window.
-///
-/// The order in which you add panels matter! The first panel you add will always be the outermost, and the last you add will always be the innermost.
-///
-/// ⚠ Always add any CentralPanel last.
-///
-/// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
-///
-/// See also: [TopBottomPanel]
-pub fn top_panel(
-    id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
-) {
-    let id = id.into();
-    gui(Box::new(move |ctx| {
-        egui::TopBottomPanel::top(id).show(ctx, |ui| {
-            call(ctx, ui);
-        });
-    }))
-}
-
-/// A panel that covers the entire bottom of the window.
-///
-/// The order in which you add panels matter! The first panel you add will always be the outermost, and the last you add will always be the innermost.
-///
-/// ⚠ Always add any CentralPanel last.
-///
-/// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
-///
-/// See also: [TopBottomPanel]
-pub fn bottom_panel(
-    id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
-) {
-    let id = id.into();
-    gui(Box::new(move |ctx| {
-        egui::TopBottomPanel::bottom(id).show(ctx, |ui| {
-            call(ctx, ui);
-        });
-    }))
-}
-
-/// A panel that covers the remainder of the screen, i.e. whatever area is left after adding other panels.
-///
-/// ⚠ CentralPanel must be added after all other panels!
-///
-/// ⚠ Any crate::Windows and crate::Areas will cover the top-level CentralPanel.
-///
-/// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
-///
-/// See also: [CentralPanel]
-pub fn central_panel(call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static) {
-    gui(Box::new(move |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            call(ctx, ui);
-        });
-    }))
-}
-
-/// A panel that covers the entire bottom of the window.
-///
-/// The order in which you add panels matter! The first panel you add will always be the outermost, and the last you add will always be the innermost.
-///
-/// ⚠ Always add any CentralPanel last.
-///
-/// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
-///
-/// See also: [Window]
-pub fn window(
-    title: impl Into<WidgetText>,
-    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
-) {
-    let title = title.into();
-    gui(Box::new(move |ctx| {
-        egui::Window::new(title).show(ctx, |ui| {
-            call(ctx, ui);
-        });
-    }))
+/// This gives you an Egui [Context] that you can use to render widgets
+pub fn gui<'a>(call: impl FnMut(&egui::Context) + 'a) {
+    let window_size = window_size();
+    let full_output = crate::graphics::GRAPHICS_STATE.egui.egui_ctx.run(
+        egui::RawInput {
+            viewport_id: egui::ViewportId::ROOT,
+            viewports: [(egui::ViewportId::ROOT, egui::ViewportInfo::default())]
+                .into_iter()
+                .collect(),
+            screen_rect: Some(egui::Rect::from_min_max(
+                egui::Pos2::ZERO,
+                egui::Pos2::new(window_size.x, window_size.y),
+            )),
+            max_texture_side: None,
+            time: Some(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64(),
+            ),
+            predicted_dt: 1.0 / 60.0,
+            modifiers: crate::gui::get_modifiers(),
+            events: crate::gui::get_events(),
+            hovered_files: Vec::new(),
+            dropped_files: Vec::new(),
+            focused: true,
+            system_theme: None,
+        },
+        call,
+    );
+    EGUI_STATE.lock().full_output = Some(full_output);
 }
 
 fn translate_key(key: CareKey) -> egui::Key {
