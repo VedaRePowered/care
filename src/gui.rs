@@ -129,7 +129,7 @@ pub fn left_panel(
 /// See also: [SidePanel]
 pub fn right_panel(
     id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync + 'static,
+    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
 ) {
     let id = id.into();
     gui(Box::new(move |ctx| {
@@ -150,7 +150,7 @@ pub fn right_panel(
 /// See also: [TopBottomPanel]
 pub fn top_panel(
     id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync + 'static,
+    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
 ) {
     let id = id.into();
     gui(Box::new(move |ctx| {
@@ -171,7 +171,7 @@ pub fn top_panel(
 /// See also: [TopBottomPanel]
 pub fn bottom_panel(
     id: impl Into<Id>,
-    call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync + 'static,
+    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
 ) {
     let id = id.into();
     gui(Box::new(move |ctx| {
@@ -190,7 +190,7 @@ pub fn bottom_panel(
 /// See the [egui docs](https://docs.rs/egui/latest/egui/containers/panel) for more details.
 ///
 /// See also: [CentralPanel]
-pub fn central_panel(call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync + 'static) {
+pub fn central_panel(call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static) {
     gui(Box::new(move |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| {
             call(ctx, ui);
@@ -209,7 +209,7 @@ pub fn central_panel(call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync 
 /// See also: [Window]
 pub fn window(
     title: impl Into<WidgetText>,
-    call: impl FnOnce(&egui::Context, &egui::Ui) + Send + Sync + 'static,
+    call: impl FnOnce(&egui::Context, &mut egui::Ui) + Send + Sync + 'static,
 ) {
     let title = title.into();
     gui(Box::new(move |ctx| {
