@@ -22,6 +22,9 @@ pub mod prelude;
 #[cfg(feature = "window")]
 /// Contains functions for working with window(s)
 pub mod window;
+#[cfg(feature = "gui")]
+/// GUI-related functions, implemented through [egui]
+pub mod gui;
 
 /// Mark a function as the care draw function.
 pub use care_macro::care_async_main as async_main;

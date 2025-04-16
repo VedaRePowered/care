@@ -14,7 +14,7 @@ mod polling;
 #[cfg(feature = "_async-tokio-internal")]
 mod tokio_event;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 /// Data for an event
 pub enum EventData {
     /// A key pressed/released event
@@ -38,7 +38,7 @@ pub enum EventData {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 /// An event that has occurred, usually from user input
 pub struct Event {
     /// The time the event was created
@@ -154,6 +154,7 @@ pub fn exit() {
 /// Process an event, this can only send events within the game, not emulate actual mouse motion or
 /// keyboard buttons
 pub fn handle_event(ev: Event) {
+    crate::gui::process_event(ev);
     match ev.data {
         EventData::KeyEvent { key, pressed } => crate::keyboard::process_key_event(key, pressed),
         EventData::MouseMoved { position } => crate::mouse::process_mouse_moved_event(position),
@@ -162,4 +163,3 @@ pub fn handle_event(ev: Event) {
         }
     }
 }
-

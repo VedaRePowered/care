@@ -198,16 +198,24 @@ pub fn rectangle_line(pos: impl Into<Vec2>, size: impl Into<Vec2>, width: impl I
 
 #[inline(always)]
 /// Render an outline of a rectangle, with a rotation
-pub fn rectangle_line_rot(pos: impl Into<Vec2>, size: impl Into<Vec2>, width: impl IntoFl, rotation: impl IntoFl) {
+pub fn rectangle_line_rot(
+    pos: impl Into<Vec2>,
+    size: impl Into<Vec2>,
+    width: impl IntoFl,
+    rotation: impl IntoFl,
+) {
     let pos = pos.into();
     let size = size.into();
     let rot = rotation.into_fl();
-    polyline([
-        pos,
-        pos+Vec2::new(size.x, 0).rotated(rot),
-        pos+size.rotated(rot),
-        pos+Vec2::new(0, size.y).rotated(rot),
-    ], width.into_fl())
+    polyline(
+        [
+            pos,
+            pos + Vec2::new(size.x, 0).rotated(rot),
+            pos + size.rotated(rot),
+            pos + Vec2::new(0, size.y).rotated(rot),
+        ],
+        width.into_fl(),
+    )
 }
 
 /// Render a triangle (in a solid colour)
@@ -451,6 +459,68 @@ pub fn present() {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Present command encoder"),
             });
+
+    let mut command_buffers = Vec::new();
+    // Render egui
+    #[cfg(feature = "gui")]
+    {
+        let full_output = GRAPHICS_STATE.egui.egui_ctx.run(
+            egui::RawInput {
+                viewport_id: egui::ViewportId::ROOT,
+                viewports: [(egui::ViewportId::ROOT, egui::ViewportInfo::default())]
+                    .into_iter()
+                    .collect(),
+                screen_rect: Some(egui::Rect::from_min_max(
+                    egui::Pos2::ZERO,
+                    egui::Pos2::new(
+                        output.texture.size().width as f32,
+                        output.texture.size().height as f32,
+                    ),
+                )),
+                max_texture_side: None,
+                time: Some(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64(),
+                ),
+                predicted_dt: 1.0 / 60.0,
+                modifiers: crate::gui::get_modifiers(),
+                events: crate::gui::get_events(),
+                hovered_files: Vec::new(),
+                dropped_files: Vec::new(),
+                focused: true,
+                system_theme: None,
+            },
+            |ctx| {
+                for call in crate::gui::get_calls() {
+                    (call)(ctx);
+                }
+            },
+        );
+        let clipped_primitives = GRAPHICS_STATE
+            .egui
+            .egui_ctx
+            .tessellate(full_output.shapes, 1.0);
+        let egui_screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [output.texture.size().width, output.texture.size().height],
+            pixels_per_point: 1.0,
+        };
+        let mut rend = GRAPHICS_STATE.egui.egui_renderer.lock();
+        let mut egui_command_buffers = rend.update_buffers(
+            &GRAPHICS_STATE.device,
+            &GRAPHICS_STATE.queue,
+            &mut encoder,
+            &clipped_primitives,
+            &egui_screen_descriptor,
+        );
+        command_buffers.append(&mut egui_command_buffers);
+        for (tex, delta) in &full_output.textures_delta.set {
+            rend.update_texture(&GRAPHICS_STATE.device, &GRAPHICS_STATE.queue, *tex, delta);
+        }
+    }
+
+    // Render our stuff
     let max_textures = GRAPHICS_STATE.care_render.read().max_textures;
     let draw_calls = GRAPHICS_STATE.care_render.write().render(screen_size);
     let placeholder_tex = GRAPHICS_STATE.placeholder_texture.get().unwrap();
@@ -558,7 +628,8 @@ pub fn present() {
         }
     }
 
-    GRAPHICS_STATE.queue.submit([encoder.finish()]);
+    command_buffers.push(encoder.finish());
+    GRAPHICS_STATE.queue.submit(command_buffers);
     std::thread::sleep(Duration::from_millis(2));
     output.present();
 

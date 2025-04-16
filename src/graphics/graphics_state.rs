@@ -29,6 +29,8 @@ pub(crate) struct GraphicsState {
     pub bind_group_layout_2d: wgpu::BindGroupLayout,
     pub placeholder_texture: OnceLock<Texture>,
     pub care_render: RwLock<CareRenderState>,
+    #[cfg(feature = "gui")]
+    pub egui: crate::gui::EguiGraphics,
 }
 
 impl GraphicsState {
@@ -131,7 +133,7 @@ impl GraphicsState {
             line_end_style: LineEndStyle::Rounded,
         };
 
-        let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d, bind_group_layouts_2d) = {
+        let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d, bind_group_layouts_2d, surface_format) = {
             let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("2D Vertex Buffer"),
                 size: 1024,
@@ -229,7 +231,14 @@ impl GraphicsState {
                 RwLock::new(vertex_buffer),
                 RwLock::new(index_buffer),
                 textures_bind_group_layout,
+                surface_format,
             )
+        };
+
+        #[cfg(feature = "gui")]
+        let egui = crate::gui::EguiGraphics {
+            egui_renderer: parking_lot::Mutex::new(egui_wgpu::Renderer::new(&device, surface_format, None, 1, false)),
+            egui_ctx: egui::Context::default(),
         };
 
         Self {
@@ -244,6 +253,9 @@ impl GraphicsState {
             bind_group_layout_2d: bind_group_layouts_2d,
             placeholder_texture: OnceLock::new(),
             care_render: RwLock::new(render),
+
+            #[cfg(feature = "gui")]
+            egui,
         }
     }
 }

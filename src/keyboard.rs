@@ -79,10 +79,10 @@ impl From<String> for Key {
 }
 
 #[derive(Debug)]
-struct KeyboardState {
-    pressed: HashSet<Key>,
-    released: HashSet<Key>,
-    held: HashSet<Key>,
+pub(crate) struct KeyboardState {
+    pub pressed: HashSet<Key>,
+    pub released: HashSet<Key>,
+    pub held: HashSet<Key>,
 }
 
 impl KeyboardState {
@@ -97,7 +97,7 @@ impl KeyboardState {
 
 static KEYBOARD_STATE: OnceLock<RwLock<KeyboardState>> = OnceLock::new();
 
-fn get_state() -> &'static RwLock<KeyboardState> {
+pub(crate) fn get_state() -> &'static RwLock<KeyboardState> {
     KEYBOARD_STATE.get_or_init(|| RwLock::new(KeyboardState::empty()))
 }
 
