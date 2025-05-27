@@ -191,18 +191,33 @@ impl<T, F: FnMut(&mut T), I: FnOnce() -> T> ApplicationHandler for AppHandler<T,
                         logical_key,
                         state,
                         repeat,
+                        text,
                         ..
                     },
                 ..
             } => {
-                if !repeat {
-                    crate::event::handle_event(crate::event::Event {
-                        timestamp: Instant::now(),
-                        data: crate::event::EventData::KeyEvent {
+                crate::event::handle_event(crate::event::Event {
+                    timestamp: Instant::now(),
+                    data: if repeat {
+                        crate::event::EventData::KeyRepeat {
+                            key: convert_key(logical_key),
+                        }
+                    } else {
+                        crate::event::EventData::KeyEvent {
                             key: convert_key(logical_key),
                             pressed: state.is_pressed(),
-                        },
-                    });
+                        }
+                    },
+                });
+                if state.is_pressed() {
+                    if let Some(text) = text {
+                        crate::event::handle_event(crate::event::Event {
+                            timestamp: Instant::now(),
+                            data: crate::event::EventData::TextEvent {
+                                text: text.to_string(),
+                            },
+                        });
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -237,6 +252,10 @@ impl<T, F: FnMut(&mut T), I: FnOnce() -> T> ApplicationHandler for AppHandler<T,
                     },
                 });
             }
+            WindowEvent::Focused(focused) => crate::event::handle_event(crate::event::Event {
+                timestamp: Instant::now(),
+                data: crate::event::EventData::FocusChange { focused },
+            }),
             _ => {}
         }
     }

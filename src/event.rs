@@ -14,7 +14,7 @@ mod polling;
 #[cfg(feature = "_async-tokio-internal")]
 mod tokio_event;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// Data for an event
 pub enum EventData {
     /// A key pressed/released event
@@ -23,6 +23,16 @@ pub enum EventData {
         key: Key,
         /// Whether it was pressed (true) or released (false)
         pressed: bool,
+    },
+    /// A key repeat event, used for GUIs
+    KeyRepeat {
+        /// The key
+        key: Key,
+    },
+    /// The user entered some text, might coincide with the key event
+    TextEvent {
+        /// The text that has been typed
+        text: String,
     },
     /// A mouse moved event
     MouseMoved {
@@ -36,9 +46,14 @@ pub enum EventData {
         /// Whether it's currently pressed
         pressed: bool,
     },
+    /// The window went in or out of focus
+    FocusChange {
+        /// Is the window currently focused
+        focused: bool,
+    },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// An event that has occurred, usually from user input
 pub struct Event {
     /// The time the event was created
@@ -65,18 +80,27 @@ pub fn end_frame() {
 }
 
 /// Run the game main loop, using a specific function that gets called once per frame
-pub fn main_loop<T>(init_fn: impl FnOnce() -> T + 'static, mut loop_fn: impl FnMut(&mut T) + 'static) {
-    main_loop_manual(move || {
-        init();
-        init_fn()
-    }, move |data| {
-        loop_fn(data);
-        end_frame();
-    });
+pub fn main_loop<T>(
+    init_fn: impl FnOnce() -> T + 'static,
+    mut loop_fn: impl FnMut(&mut T) + 'static,
+) {
+    main_loop_manual(
+        move || {
+            init();
+            init_fn()
+        },
+        move |data| {
+            loop_fn(data);
+            end_frame();
+        },
+    );
 }
 
 /// Like [main_loop], but you have to call [end_frame] stuff yourself
-pub fn main_loop_manual<T>(init_fn: impl FnOnce() -> T + 'static, loop_fn: impl FnMut(&mut T) + 'static) {
+pub fn main_loop_manual<T>(
+    init_fn: impl FnOnce() -> T + 'static,
+    loop_fn: impl FnMut(&mut T) + 'static,
+) {
     #[cfg(feature = "window")]
     crate::window::run(init_fn, loop_fn);
     #[cfg(not(feature = "window"))]
@@ -154,12 +178,15 @@ pub fn exit() {
 /// Process an event, this can only send events within the game, not emulate actual mouse motion or
 /// keyboard buttons
 pub fn handle_event(ev: Event) {
-    crate::gui::process_event(ev);
-    match ev.data {
-        EventData::KeyEvent { key, pressed } => crate::keyboard::process_key_event(key, pressed),
-        EventData::MouseMoved { position } => crate::mouse::process_mouse_moved_event(position),
+    match &ev.data {
+        EventData::KeyEvent { key, pressed } => crate::keyboard::process_key_event(*key, *pressed),
+        EventData::MouseMoved { position } => crate::mouse::process_mouse_moved_event(*position),
         EventData::MouseClick { button, pressed } => {
-            crate::mouse::process_mouse_click_event(button, pressed)
+            crate::mouse::process_mouse_click_event(*button, *pressed)
         }
+        EventData::TextEvent { .. } => {}
+        EventData::FocusChange { .. } => {}
+        EventData::KeyRepeat { .. } => {}
     }
+    crate::gui::process_event(ev);
 }

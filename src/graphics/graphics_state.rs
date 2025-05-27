@@ -239,6 +239,7 @@ impl GraphicsState {
         let egui = crate::gui::EguiGraphics {
             egui_renderer: parking_lot::Mutex::new(egui_wgpu::Renderer::new(&device, surface_format, None, 1, false)),
             egui_ctx: egui::Context::default(),
+            start_time: std::time::Instant::now(),
         };
 
         Self {
