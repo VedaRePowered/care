@@ -1,7 +1,9 @@
 use std::{fmt::Debug, io::Cursor, path::Path, sync::Arc};
 
 use image::{DynamicImage, EncodableLayout, ImageFormat, ImageReader, RgbaImage};
-use wgpu::{Extent3d, Origin3d, TexelCopyTextureInfo, TextureAspect};
+use wgpu::{
+    util::TextureBlitter, Extent3d, Origin3d, TexelCopyTextureInfo, TextureAspect, TextureFormat, TextureViewDescriptor,
+};
 use wrgpgpu::bindings::texture::TextureBindType;
 
 use crate::math::{Vec2, Vec4};
@@ -158,13 +160,24 @@ impl Texture {
 #[cfg(feature = "compute")]
 impl Texture {
     /// Copy a texture from a storage texture bound to a compute shader into a render texture
-    pub fn copy_from_compute<T: TextureBindType>(&self, compute: &wrgpgpu::TextureBind<image::RgbaImage, T>) {
+    pub fn copy_from_compute<T: TextureBindType>(
+        &self,
+        compute: &wrgpgpu::TextureBind<image::RgbaImage, T>,
+    ) {
         let mut encoder =
             GRAPHICS_STATE
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Present command encoder"),
                 });
+        /*
+        TextureBlitter::new(&GRAPHICS_STATE.device, TextureFormat::Rgba8Unorm).copy(
+            &GRAPHICS_STATE.device,
+            &mut encoder,
+            &compute.texture.create_view(&TextureViewDescriptor::default()),
+            &self.0.texture.create_view(&TextureViewDescriptor::default()),
+        );
+        */
         encoder.copy_texture_to_texture(
             TexelCopyTextureInfo {
                 texture: &compute.texture,

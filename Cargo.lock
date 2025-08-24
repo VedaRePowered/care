@@ -3207,7 +3207,7 @@ dependencies = [
 [[package]]
 name = "wrgpgpu"
 version = "0.1.4"
-source = "git+https://gitlab.101100.ca/veda/wrgpgpu#271bc09ee1bf568d4a5d853821fd978ae8f9ea6d"
+source = "git+https://gitlab.101100.ca/veda/wrgpgpu#d3cee9eab29036715f5da84d3069d2cad83795a7"
 dependencies = [
  "bytemuck",
  "image",
