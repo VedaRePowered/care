@@ -83,7 +83,7 @@ pub fn is_complete() -> bool {
 /// texture from the compute shader will be observed in the graphics module when the texture is
 /// rendered.
 pub fn get_texture_from_binding<T: wrgpgpu::bindings::texture::TextureBindType>(
-    binding: wrgpgpu::TextureBind<image::RgbaImage, T>,
+    binding: &wrgpgpu::TextureBind<image::RgbaImage, T>,
 ) -> crate::graphics::Texture {
-    crate::graphics::Texture::new_from_wgpu(binding.texture)
+    crate::graphics::Texture::new_from_wgpu(binding.texture.clone())
 }

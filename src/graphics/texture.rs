@@ -1,6 +1,8 @@
 use std::{fmt::Debug, io::Cursor, path::Path, sync::Arc};
 
 use image::{DynamicImage, EncodableLayout, ImageFormat, ImageReader, RgbaImage};
+use wgpu::{Extent3d, Origin3d, TexelCopyTextureInfo, TextureAspect};
+use wrgpgpu::bindings::texture::TextureBindType;
 
 use crate::math::{Vec2, Vec4};
 
@@ -54,16 +56,18 @@ impl Texture {
             height,
             depth_or_array_layers: 1,
         };
-        let texture = GRAPHICS_STATE.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+        let texture = GRAPHICS_STATE
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
         GRAPHICS_STATE.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
@@ -80,15 +84,17 @@ impl Texture {
             size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = GRAPHICS_STATE.device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
+        let sampler = GRAPHICS_STATE
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            });
         Texture(Arc::new(TextureHandle {
             size: Vec2::new(width, height),
             texture: Arc::new(texture),
@@ -98,15 +104,17 @@ impl Texture {
     }
     pub(crate) fn new_from_wgpu(texture: Arc<wgpu::Texture>) -> Self {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = GRAPHICS_STATE.device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
+        let sampler = GRAPHICS_STATE
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            });
         Texture(Arc::new(TextureHandle {
             size: Vec2::new(texture.width(), texture.height()),
             texture,
@@ -144,6 +152,39 @@ impl Texture {
     /// Get the size of the texture
     pub fn size(&self) -> Vec2 {
         self.0.size
+    }
+}
+
+#[cfg(feature = "compute")]
+impl Texture {
+    /// Copy a texture from a storage texture bound to a compute shader into a render texture
+    pub fn copy_from_compute<T: TextureBindType>(&self, compute: &wrgpgpu::TextureBind<image::RgbaImage, T>) {
+        let mut encoder =
+            GRAPHICS_STATE
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Present command encoder"),
+                });
+        encoder.copy_texture_to_texture(
+            TexelCopyTextureInfo {
+                texture: &compute.texture,
+                mip_level: 0,
+                origin: Origin3d::default(),
+                aspect: TextureAspect::All,
+            },
+            TexelCopyTextureInfo {
+                texture: &self.0.texture,
+                mip_level: 0,
+                origin: Origin3d::default(),
+                aspect: TextureAspect::All,
+            },
+            Extent3d {
+                width: self.0.size.x as u32,
+                height: self.0.size.y as u32,
+                depth_or_array_layers: 1,
+            },
+        );
+        GRAPHICS_STATE.queue.submit([encoder.finish()]);
     }
 }
 
