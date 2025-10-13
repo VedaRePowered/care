@@ -1,9 +1,7 @@
 use std::{fmt::Debug, io::Cursor, path::Path, sync::Arc};
 
 use image::{DynamicImage, EncodableLayout, ImageFormat, ImageReader, RgbaImage};
-use wgpu::{
-    util::TextureBlitter, Extent3d, Origin3d, TexelCopyTextureInfo, TextureAspect, TextureFormat, TextureViewDescriptor,
-};
+use wgpu::{Extent3d, Origin3d, TexelCopyTextureInfo, TextureAspect};
 use wrgpgpu::bindings::texture::TextureBindType;
 
 use crate::math::{Vec2, Vec4};

@@ -4,7 +4,8 @@ use parking_lot::RwLock;
 use wgpu::{Buffer, Device, Queue};
 
 use crate::{
-    graphics::LineJoinStyle, math::{IntoFl, Vec2, Vec4}
+    graphics::LineJoinStyle,
+    math::{IntoFl, Vec2, Vec4},
 };
 
 use super::{DrawCommand, DrawCommandData, LineEndStyle, Texture, Vertex2d, GRAPHICS_STATE};
@@ -399,11 +400,9 @@ pub fn present() {
     }
 
     let output_key = GRAPHICS_STATE.window_surfaces.keys().next().unwrap();
-    let output = GRAPHICS_STATE.window_surfaces[output_key]
-        .read()
-        .0
-        .get_current_texture();
-    let output = if let Ok(output) = output {
+    let output = GRAPHICS_STATE.window_surfaces[output_key].read();
+    let output = output.0.get_current_texture().map(|t| (t, output.1));
+    let (output, screen_size) = if let Ok(output) = output {
         output
     } else {
         // Output is outdated, request a new surface...
@@ -413,7 +412,7 @@ pub fn present() {
             .find(|w| w.id() == *output_key)
             .cloned()
             .unwrap();
-        let size = (win.inner_size().width, win.inner_size().height);
+        let size = (win.inner_size().width, win.inner_size().height, win.scale_factor());
         let mut output = GRAPHICS_STATE.window_surfaces[output_key].write();
         *output = (
             GRAPHICS_STATE
@@ -443,11 +442,11 @@ pub fn present() {
         };
         output.0.configure(&GRAPHICS_STATE.device, &config);
 
-        output.0.get_current_texture().unwrap()
+        (output.0.get_current_texture().unwrap(), output.1)
     };
 
-    let screen_size = output.texture.size();
-    let screen_size = Vec2::new(screen_size.width, screen_size.height);
+    let screen_scale = screen_size.2 as f32;
+    let screen_size = Vec2::new(screen_size.0, screen_size.1);
 
     let view = output
         .texture
@@ -465,26 +464,36 @@ pub fn present() {
     let egui_data = {
         let mut egui_rend = GRAPHICS_STATE.egui.egui_renderer.lock();
         if let Some(full_output) = crate::gui::get_full_output() {
-        let clipped_primitives = GRAPHICS_STATE
-            .egui
-            .egui_ctx
-            .tessellate(full_output.shapes, 1.0);
-        let egui_screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [output.texture.size().width, output.texture.size().height],
-            pixels_per_point: 1.0,
-        };
-        let mut egui_command_buffers = egui_rend.update_buffers(
-            &GRAPHICS_STATE.device,
-            &GRAPHICS_STATE.queue,
-            &mut encoder,
-            &clipped_primitives,
-            &egui_screen_descriptor,
-        );
-        command_buffers.append(&mut egui_command_buffers);
-        for (tex, delta) in &full_output.textures_delta.set {
-            egui_rend.update_texture(&GRAPHICS_STATE.device, &GRAPHICS_STATE.queue, *tex, delta);
-        }
-            Some((full_output.textures_delta, clipped_primitives, egui_screen_descriptor, egui_rend))
+            let clipped_primitives = GRAPHICS_STATE
+                .egui
+                .egui_ctx
+                .tessellate(full_output.shapes, 1.0);
+            let egui_screen_descriptor = egui_wgpu::ScreenDescriptor {
+                size_in_pixels: [output.texture.size().width, output.texture.size().height],
+                pixels_per_point: screen_scale,
+            };
+            let mut egui_command_buffers = egui_rend.update_buffers(
+                &GRAPHICS_STATE.device,
+                &GRAPHICS_STATE.queue,
+                &mut encoder,
+                &clipped_primitives,
+                &egui_screen_descriptor,
+            );
+            command_buffers.append(&mut egui_command_buffers);
+            for (tex, delta) in &full_output.textures_delta.set {
+                egui_rend.update_texture(
+                    &GRAPHICS_STATE.device,
+                    &GRAPHICS_STATE.queue,
+                    *tex,
+                    delta,
+                );
+            }
+            Some((
+                full_output.textures_delta,
+                clipped_primitives,
+                egui_screen_descriptor,
+                egui_rend,
+            ))
         } else {
             None
         }
@@ -498,7 +507,11 @@ pub fn present() {
         draw_calls
             .iter()
             .flat_map(|v| &v.vertices)
-            .cloned()
+            .map(|v| Vertex2d {
+                position: [v.position[0] * screen_scale, v.position[1] * screen_scale],
+
+                ..*v
+            })
             .collect(),
     );
     let indices: ForceAlign<Vec<u32>> = ForceAlign(
@@ -599,7 +612,9 @@ pub fn present() {
     }
     // Egui render pass
     #[cfg(feature = "gui")]
-    if let Some((textures_delta, clipped_primitives, egui_screen_descriptor, mut egui_rend)) = egui_data {
+    if let Some((textures_delta, clipped_primitives, egui_screen_descriptor, mut egui_rend)) =
+        egui_data
+    {
         {
             let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("EGUI Render Pass"),

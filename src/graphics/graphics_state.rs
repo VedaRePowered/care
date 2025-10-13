@@ -14,7 +14,7 @@ use crate::math::{Mat3, Vec4};
 
 use super::{CareRenderState, Font, LineEndStyle, LineJoinStyle, Texture, Vertex2d};
 
-pub type WindowSurface = RwLock<(Surface<'static>, (u32, u32))>;
+pub type WindowSurface = RwLock<(Surface<'static>, (u32, u32, f64))>;
 
 #[derive(Debug)]
 pub(crate) struct GraphicsState {
@@ -46,7 +46,11 @@ impl GraphicsState {
             .iter()
             .map(|win| {
                 let win = win.clone();
-                let size = (win.inner_size().width, win.inner_size().height);
+                let size = (
+                    win.inner_size().width,
+                    win.inner_size().height,
+                    win.scale_factor(),
+                );
                 (
                     win.id(),
                     RwLock::new((
@@ -133,7 +137,13 @@ impl GraphicsState {
             line_end_style: LineEndStyle::Rounded,
         };
 
-        let (render_pipeline_2d, vertex_buffer_2d, index_buffer_2d, bind_group_layouts_2d, surface_format) = {
+        let (
+            render_pipeline_2d,
+            vertex_buffer_2d,
+            index_buffer_2d,
+            bind_group_layouts_2d,
+            surface_format,
+        ) = {
             let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("2D Vertex Buffer"),
                 size: 1024,
@@ -237,7 +247,13 @@ impl GraphicsState {
 
         #[cfg(feature = "gui")]
         let egui = crate::gui::EguiGraphics {
-            egui_renderer: parking_lot::Mutex::new(egui_wgpu::Renderer::new(&device, surface_format, None, 1, false)),
+            egui_renderer: parking_lot::Mutex::new(egui_wgpu::Renderer::new(
+                &device,
+                surface_format,
+                None,
+                1,
+                false,
+            )),
             egui_ctx: egui::Context::default(),
             start_time: std::time::Instant::now(),
         };

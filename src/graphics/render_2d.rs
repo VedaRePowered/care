@@ -90,12 +90,12 @@ pub(crate) struct DrawCommand {
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
 pub(crate) struct Vertex2d {
-    position: [f32; 2],
-    uv: [f16; 2],
-    colour: [u8; 4],
-    rounding_box: [f16; 4],
-    rounding_values: [u8; 4],
-    tex: u32,
+    pub position: [f32; 2],
+    pub uv: [f16; 2],
+    pub colour: [u8; 4],
+    pub rounding_box: [f16; 4],
+    pub rounding_values: [u8; 4],
+    pub tex: u32,
 }
 
 impl Vertex2d {
